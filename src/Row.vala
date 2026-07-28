@@ -314,8 +314,15 @@ namespace Gala.Plugins.Xy {
                 floating.remove (window);
             }
 
+            floating_changed (window);
             queue_retile ();
         }
+
+        // Emitted on every floating state change, including the indirect
+        // ones (width cycling, maximizing) that don't go through Main's
+        // toggle. Main uses it to restyle the focus ring, which marks a
+        // floating window with a dashed border.
+        public signal void floating_changed (Meta.Window window);
 
         // How tall a window is made when it floats out of the row, as a
         // fraction of the monitor work area, and how many px short of full
@@ -330,6 +337,27 @@ namespace Gala.Plugins.Xy {
         // are — the window keeps its column position in the row it came
         // from, which is where the user expects to find it.
         private void shrink_on_float (Meta.Window window) {
+            // A maximized window is pinned to the monitor by Mutter, so
+            // resizing it here would be reverted and it would sit there as a
+            // full-screen "floating" window. Unmaximize first — but its
+            // frame rect only reports the restored geometry once Mutter has
+            // processed that, so do the shrink on the next idle instead of
+            // against the stale full-monitor rect. The local strong ref
+            // keeps the window alive for the closure; the floating re-check
+            // covers it being unfloated again in between.
+            if (is_maximized (window)) {
+                Meta.Window pending = window;
+                pending.unmaximize (Meta.MaximizeFlags.BOTH);
+                GLib.Idle.add (() => {
+                    if (!shutting_down && is_floating (pending)) {
+                        shrink_on_float (pending);
+                    }
+
+                    return GLib.Source.REMOVE;
+                });
+                return;
+            }
+
             var area = workspace.get_work_area_for_monitor (monitor);
             var frame = window.get_frame_rect ();
 

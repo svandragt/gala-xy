@@ -63,8 +63,9 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   git history / commit messages for why). `grab_op_begin`/`grab_op_end` also drive
   divider-style resize: `resize_delta_for_op()` maps a horizontal edge-resize op
   (`RESIZING_E`/`_NE`/`_SE` vs `RESIZING_W`/`_NW`/`_SW`) to which row-neighbor sits on the
-  dragged side, `begin_divider_resize()` looks that neighbor up via `find_owning_row()` +
-  `Row.neighbor()` and hooks the dragged window's `size_changed` to live-mirror the resize
+  dragged side, `begin_divider_resize()` bails outright if the *dragged* window is floating (it's
+  out of the row, so it must not push a tiled neighbor), otherwise looks that neighbor
+  up via `find_owning_row()` + `Row.neighbor()` and hooks the dragged window's `size_changed` to live-mirror the resize
   into it (facing edge tracks the drag, far edge fixed — same math as elementary's own
   snapped-window divider), and `end_divider_resize()` disconnects that hook and forces one
   more `retile()` on grab end. While a divider resize is in flight the partner is exempt
@@ -116,7 +117,10 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   "Known limitations" for the full account), so a row wider than one monitor would otherwise
   push later windows into the *next* monitor's real screen coordinates and have Mutter
   silently reassign their `.get_monitor()` to match; clamping makes overflow stack at the edge
-  instead. `Row.grabbed_window` (static) suppresses workspace-signal reactions to whichever
+  instead. Every state change goes through `set_floating()`, which emits `floating_changed` — Main
+  hooks it per Row in `track_workspace()` to restyle the focus ring, so the dashed border
+  also clears on the indirect unfloat paths (width cycling, maximizing), not just the
+  explicit toggle. `Row.grabbed_window` (static) suppresses workspace-signal reactions to whichever
   window is mid-drag, so Mutter's own churn during a live cross-monitor drag doesn't fight the
   user's pointer. `Row.resize_partner` (static, same shape) is `retile()`'s other exemption:
   whichever window `Main`'s divider-resize handling is currently driving directly, so an
@@ -127,7 +131,10 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   `set_floating()`. That's toggled by dragging the window to its monitor's bottom edge (see
   `Main.vala` above) or the `toggle-floating` keybinding. On the way in, `shrink_on_float()`
   gives a still-full-row-height window two thirds of the work area's height, centred
-  vertically (`Geometry.float_shrink_geometry()`), so it reads as lifted out of the row;
+  vertically (`Geometry.float_shrink_geometry()`), so it reads as lifted out of the row —
+  unmaximizing first when needed, and deferring the shrink one idle tick, since a
+  maximized window's frame rect still reports the full monitor until Mutter has processed
+  the unmaximize;
   an interactive resize deliberately does *not* unfloat, since a floating window is meant to
   be sized freely. Floating is also cleared as a side effect
   of `cycle_width()` (Super+R) or maximizing (`on_maximized_changed()`'s hook on

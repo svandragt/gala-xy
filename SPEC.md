@@ -85,6 +85,10 @@ Rules:
 - Width cycling shrinks or grows the row-neighbour to compensate, so the row
   stays gapless. It never reaches across the row: only a window's immediate
   neighbour absorbs the change, and it stops at the ends rather than wrapping.
+  The neighbour to the right absorbs it by default; if there isn't a usable
+  one — the window is last in the row, or its right neighbour is floating,
+  maximised or minimised — the left neighbour absorbs it instead, so the last
+  window in a row can still be cycled without overflowing the monitor.
 - Width cycling reads the window's *current* width to decide the next step,
   so it behaves sensibly after a manual resize.
 - Bracket keys are used because every `Super`+arrow combination is already
@@ -133,7 +137,10 @@ to a drag or resize.
   bottom edge again, cycling the window's width, or maximising it. The last
   two count as "the user has signalled they want it back in the row".
   Resizing a floating window by dragging its edge does **not** unfloat it —
-  a floating window is meant to be sized freely.
+  a floating window is meant to be sized freely, and the resize never drives
+  a tiled neighbour the way a divider resize inside the row does.
+- Floating a maximised window unmaximises it first, then shrinks and centres
+  it like any other — a maximised floating window would just cover the row.
 - A window that floats out of the row at full row height is shrunk to two
   thirds of the work-area height and centred vertically, so it visibly sits
   above the row rather than in it. Its width and horizontal position are

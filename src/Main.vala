@@ -129,6 +129,12 @@ namespace Gala.Plugins.Xy {
                         display.get_primary_monitor ());
                     var row = new Row (workspace, monitor);
                     row.grabbed_window_churn.connect (on_grabbed_window_churn);
+                    // Every path that changes a window's floating state has
+                    // to restyle the focus ring, not just the explicit
+                    // toggle — width cycling and maximizing clear floating
+                    // as a side effect too, and the ring would otherwise
+                    // stay dashed until the next focus change.
+                    row.floating_changed.connect (() => focus_ring.refresh_floating_state ());
                     rows.append (row);
                 } else {
                     warning ("xy: track_workspace workspace_index=%d monitor=%d row already exists, skipping",
@@ -229,6 +235,14 @@ namespace Gala.Plugins.Xy {
         private void begin_divider_resize (Meta.Window window, Meta.GrabOp op) {
             int delta = Geometry.resize_delta_for_op (op);
             if (delta == 0) {
+                return;
+            }
+
+            // A floating window is out of the row entirely, so resizing it
+            // must not push a tiled neighbor the user never touched — the
+            // same rule is_usable_neighbor() applies to the *partner*, but
+            // applied to the dragged window itself.
+            if (Row.is_floating (window)) {
                 return;
             }
 
@@ -402,10 +416,9 @@ namespace Gala.Plugins.Xy {
                 return;
             }
 
+            // The ring is restyled by the row's floating_changed signal (see
+            // track_workspace()), which covers the indirect unfloat paths too.
             row.set_floating (window, !Row.is_floating (window));
-            // The toggled window is usually the focused one, so the ring is
-            // already tracking it and won't be re-styled by a focus change.
-            focus_ring.refresh_floating_state ();
         }
 
         private void on_toggle_floating (Meta.Display display, Meta.Window? window, Clutter.KeyEvent? event,

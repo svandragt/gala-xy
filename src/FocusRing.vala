@@ -25,9 +25,9 @@ namespace Gala.Plugins.Xy {
         // Dashed + dimmed instead of solid while the tracked window is
         // floating, so the focus indicator itself distinguishes "focused,
         // in the row" from "focused, floating above it" (see SPEC.md
-        // "Identifying a floating window"). The shadow that a floating
-        // window also gets (applied in Row.set_floating) covers the
-        // unfocused case; this covers the focused one.
+        // "Identifying a floating window"). This is the only floating
+        // marker — a drop shadow for the unfocused case was tried and
+        // dropped, see Row.set_floating() for why.
         private const double MUTED_ALPHA = 0.55;
         private const double DASH_ON = 8.0;
         private const double DASH_OFF = 6.0;
