@@ -127,6 +127,17 @@ void test_is_dropped_near_bottom_edge_false_outside_threshold () {
     assert (!Geometry.is_dropped_near_bottom_edge (750, 100, 0, 900, 10));
 }
 
+void test_is_dropped_near_bottom_edge_false_for_a_full_height_window () {
+    // A tiled window is exactly work-area height, so its bottom edge is
+    // always flush — a plain reorder or cross-monitor drop must not read as
+    // a bottom-edge drag just because the user didn't lift it upwards.
+    assert (!Geometry.is_dropped_near_bottom_edge (0, 900, 0, 900, 10));
+    // Even nudged down a few px, still within the threshold of its own top.
+    assert (!Geometry.is_dropped_near_bottom_edge (8, 900, 0, 900, 10));
+    // Pushed properly down, it does count.
+    assert (Geometry.is_dropped_near_bottom_edge (60, 900, 0, 900, 10));
+}
+
 void test_is_dropped_near_bottom_edge_accounts_for_area_offset () {
     // A non-zero area.y (e.g. a monitor below the primary one) shifts the
     // bottom edge accordingly.
@@ -192,6 +203,8 @@ public static int main (string[] args) {
         test_is_dropped_near_bottom_edge_false_outside_threshold);
     Test.add_func ("/geometry/is_dropped_near_bottom_edge/accounts_for_area_offset",
         test_is_dropped_near_bottom_edge_accounts_for_area_offset);
+    Test.add_func ("/geometry/is_dropped_near_bottom_edge/false_for_a_full_height_window",
+        test_is_dropped_near_bottom_edge_false_for_a_full_height_window);
     Test.add_func ("/geometry/float_shrink_geometry/shrinks_and_centres_a_full_height_window",
         test_float_shrink_geometry_shrinks_and_centres_a_full_height_window);
     Test.add_func ("/geometry/float_shrink_geometry/treats_near_full_height_as_full_height",

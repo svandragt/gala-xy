@@ -105,8 +105,10 @@ Rules:
   Both windows resize together and the shared boundary moves like a divider —
   matching how elementary already behaves for two windows snapped
   left/right. No gap, no overlap, and the far edges stay put.
-- **Float**: drag a window to the bottom edge of its monitor. Drag it there
-  again to unfloat.
+- **Float**: drag a window *down* to the bottom edge of its monitor. Drag it
+  there again to unfloat. A window that is simply dropped elsewhere — a
+  reorder, or a move to another monitor — never floats, even though a tiled
+  window's bottom edge already sits at the bottom of the work area.
 
 ### During any drag
 

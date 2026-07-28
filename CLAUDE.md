@@ -74,8 +74,11 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   also checks every plain-move drop against `dropped_on_bottom_edge()`
   (`Geometry.is_dropped_near_bottom_edge()`, proxied off the dropped frame's resting
   position rather than live pointer tracking) and, if the window landed within
-  `FLOAT_EDGE_THRESHOLD` px of its monitor's work-area bottom edge, toggles floating
-  instead of running the normal re-home path — see `Row.vala`'s floating notes below. The
+  `FLOAT_EDGE_THRESHOLD` px of its monitor's work-area bottom edge *and* its top edge
+  moved down by more than that same threshold, toggles floating instead of running the
+  normal re-home path — the top-edge half matters because a tiled window is exactly
+  work-area height, so the bottom-edge test alone matches every drop that wasn't dragged
+  upwards, and cross-monitor drags were floating instead of re-homing — see `Row.vala`'s floating notes below. The
   `toggle-floating` keybinding (default Super+backslash — Super+F was taken, and Super+Escape turned out to be swallowed before reaching the plugin) drives
   the same toggle from the keyboard, via `find_owning_row()` on the focused window.
 - **`Row.vala`** — one row = one monitor's tiled window order for one workspace. Holds

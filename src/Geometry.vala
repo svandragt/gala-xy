@@ -61,7 +61,16 @@ namespace Gala.Plugins.Xy {
         // ends up right at the work area's bottom edge.
         public static bool is_dropped_near_bottom_edge (int frame_y, int frame_height, int area_y, int area_height,
             int threshold) {
-            return frame_y + frame_height >= area_y + area_height - threshold;
+            // Both edges have to say so. A tiled window is exactly work-area
+            // height, so the bottom-edge test alone is true of *every* drop
+            // that didn't drag the window upwards — including a plain
+            // reorder or a move to another monitor, which would then float
+            // instead of being re-homed. Requiring the top edge to have
+            // moved down too means only a deliberate push toward the bottom
+            // qualifies.
+            bool bottom_at_edge = frame_y + frame_height >= area_y + area_height - threshold;
+            bool pushed_down = frame_y > area_y + threshold;
+            return bottom_at_edge && pushed_down;
         }
 
         // A window that was tiled is full work-area height, which reads as
