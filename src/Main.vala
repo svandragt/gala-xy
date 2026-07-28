@@ -390,6 +390,9 @@ namespace Gala.Plugins.Xy {
             }
 
             row.set_floating (window, !Row.is_floating (window));
+            // The toggled window is usually the focused one, so the ring is
+            // already tracking it and won't be re-styled by a focus change.
+            focus_ring.refresh_floating_state ();
         }
 
         private void on_toggle_floating (Meta.Display display, Meta.Window? window, Clutter.KeyEvent? event,
@@ -540,7 +543,7 @@ namespace Gala.Plugins.Xy {
                 return;
             }
 
-            unowned var target = row.neighbor (window, delta);
+            unowned var target = row.neighbor_wrapping (window, delta);
             if (target != null) {
                 target.activate (wm.get_display ().get_current_time ());
             }

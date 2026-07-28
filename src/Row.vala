@@ -252,7 +252,45 @@ namespace Gala.Plugins.Xy {
                 floating.remove (window);
             }
 
+            set_float_shadow (window, value);
             queue_retile ();
+        }
+
+        // Name the floating window's shadow effect so it can be found and
+        // removed again by the same key on unfloat — Clutter has no "is this
+        // effect mine" query beyond get_effect(name).
+        private const string FLOAT_SHADOW_NAME = "gala-xy-float-shadow";
+
+        // A floating window is lifted out of the row, so it gets a drop
+        // shadow to say so visually — the unfocused counterpart to
+        // FocusRingContent's muted border (see SPEC.md "Identifying a
+        // floating window"). Reuses Gala's own ShadowEffect with the same
+        // "window" style Gala draws around window clones in the
+        // multitasking view, so it matches the rest of the desktop rather
+        // than being a bespoke shadow.
+        private void set_float_shadow (Meta.Window window, bool value) {
+            unowned var actor = window.get_compositor_private () as Clutter.Actor;
+            if (actor == null) {
+                return;
+            }
+
+            var existing = actor.get_effect (FLOAT_SHADOW_NAME);
+
+            if (!value) {
+                if (existing != null) {
+                    actor.remove_effect (existing);
+                }
+
+                return;
+            }
+
+            if (existing != null) {
+                return;
+            }
+
+            var scale = Gala.Utils.get_ui_scaling_factor (workspace.get_display (), monitor);
+            var shadow = new Gala.ShadowEffect ("window", scale);
+            actor.add_effect_with_name (FLOAT_SHADOW_NAME, shadow);
         }
 
         // Backing store for excluded-app-ids/excluded-title-keywords (see
@@ -629,6 +667,26 @@ namespace Gala.Plugins.Xy {
             if (target < 0 || target >= (int) order.length ()) {
                 return null;
             }
+
+            return order.nth_data (target);
+        }
+
+        // Like neighbor(), but wrapping around the ends of the row: one step
+        // right of the last window is the first, and vice versa. Kept
+        // separate from neighbor() deliberately — wrapping is right for
+        // keyboard focus (a row is a loop you can cycle through) but wrong
+        // for the resize/cycle-width callers, where "grow into the window on
+        // that side" must not reach across the whole row to the far end.
+        public unowned Meta.Window? neighbor_wrapping (Meta.Window window, int delta) {
+            int index = order.index (window);
+            int length = (int) order.length ();
+            if (index < 0 || length == 0) {
+                return null;
+            }
+
+            // GLib's % keeps the sign of the dividend, so a -1 step off the
+            // left end needs the extra + length to land on the last window.
+            int target = ((index + delta) % length + length) % length;
 
             return order.nth_data (target);
         }

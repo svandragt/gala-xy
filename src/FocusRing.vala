@@ -22,6 +22,30 @@ namespace Gala.Plugins.Xy {
         // with no color set at all.
         private Clutter.Color color = { 0x64, 0xba, 0xff, 0xff };
 
+        // Dashed + dimmed instead of solid while the tracked window is
+        // floating, so the focus indicator itself distinguishes "focused,
+        // in the row" from "focused, floating above it" (see SPEC.md
+        // "Identifying a floating window"). The shadow that a floating
+        // window also gets (applied in Row.set_floating) covers the
+        // unfocused case; this covers the focused one.
+        private const double MUTED_ALPHA = 0.55;
+        private const double DASH_ON = 8.0;
+        private const double DASH_OFF = 6.0;
+
+        private bool muted = false;
+
+        public void set_muted (bool value) {
+            if (value == muted) {
+                return;
+            }
+
+            muted = value;
+            // Same reason as set_color(): the content is a cached texture,
+            // and a style change with no size change needs an explicit
+            // invalidate to re-run draw().
+            content.invalidate ();
+        }
+
         public void set_color (Gdk.RGBA rgba) {
             color = {
                 (uint8) Math.round (rgba.red * 255),
@@ -45,7 +69,13 @@ namespace Gala.Plugins.Xy {
             cr.paint ();
             cr.set_operator (Cairo.Operator.OVER);
 
-            cr.set_source_rgba (color.red / 255.0, color.green / 255.0, color.blue / 255.0, color.alpha / 255.0);
+            var alpha = color.alpha / 255.0;
+            if (muted) {
+                alpha *= MUTED_ALPHA;
+                cr.set_dash ({ DASH_ON, DASH_OFF }, 0);
+            }
+
+            cr.set_source_rgba (color.red / 255.0, color.green / 255.0, color.blue / 255.0, alpha);
             cr.set_line_width (THICKNESS);
             Gala.Drawing.Utilities.cairo_rounded_rectangle (cr,
                 THICKNESS / 2.0, THICKNESS / 2.0,
@@ -140,7 +170,17 @@ namespace Gala.Plugins.Xy {
             size_signal = window.size_changed.connect (() => update ());
             unmanaged_signal = window.unmanaged.connect (() => track (null));
             ring.visible = true;
+            ring.set_muted (Row.is_floating (window));
             update ();
+        }
+
+        // Called by Main whenever a window's floating state is toggled: the
+        // toggle can happen while that window already has focus, so there's
+        // no focus change to re-run track() and pick the new style up.
+        public void refresh_floating_state () {
+            if (tracked != null) {
+                ring.set_muted (Row.is_floating (tracked));
+            }
         }
 
         private void update () {
