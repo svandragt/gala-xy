@@ -43,7 +43,7 @@ switching (`Super+Left/Right` by default) is untouched. It's only the layout
 | `Super+[` / `Super+]` | Move keyboard focus to the window left/right in the row |
 | `Super+Shift+[` / `Super+Shift+]` | Move the focused window itself left/right in the row |
 | `Super+R` | Cycle the focused window's width between 33%, 50%, and 67% of the monitor, shrinking or growing its row-neighbour to compensate |
-| `Super+Escape` | Toggle floating for the focused window |
+| `Super+\` | Toggle floating for the focused window |
 
 Every `Super`+arrow-key combination is already claimed by Pantheon/GNOME
 defaults (workspace switching, move-to-monitor, move-to-workspace, tiling),

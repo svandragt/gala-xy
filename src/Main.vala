@@ -75,18 +75,30 @@ namespace Gala.Plugins.Xy {
                 untrack_removed_workspaces (workspace_manager);
             });
 
-            display.add_keybinding ("reorder-left", settings, Meta.KeyBindingFlags.NONE, on_reorder_left);
-            display.add_keybinding ("reorder-right", settings, Meta.KeyBindingFlags.NONE, on_reorder_right);
-            display.add_keybinding ("focus-left", settings, Meta.KeyBindingFlags.NONE, on_focus_left);
-            display.add_keybinding ("focus-right", settings, Meta.KeyBindingFlags.NONE, on_focus_right);
-            display.add_keybinding ("cycle-width", settings, Meta.KeyBindingFlags.NONE, on_cycle_width);
-            display.add_keybinding ("toggle-floating", settings, Meta.KeyBindingFlags.NONE, on_toggle_floating);
+            add_keybinding (display, "reorder-left", on_reorder_left);
+            add_keybinding (display, "reorder-right", on_reorder_right);
+            add_keybinding (display, "focus-left", on_focus_left);
+            add_keybinding (display, "focus-right", on_focus_right);
+            add_keybinding (display, "cycle-width", on_cycle_width);
+            add_keybinding (display, "toggle-floating", on_toggle_floating);
 
             grab_op_begin_id = display.grab_op_begin.connect (on_grab_op_begin);
             grab_op_end_id = display.grab_op_end.connect (on_grab_op_end);
             do_focus_window_id = display.do_focus_window.connect (on_window_focused);
 
             focus_ring = new FocusRing (wm);
+        }
+
+        // Meta.Display.add_keybinding() returns the new binding's action id,
+        // or 0 (KeyBindingAction.NONE) when the accelerator couldn't be
+        // registered — most often because another component already holds
+        // that combination. Without this the plugin just silently has a dead
+        // shortcut; the journal is its only diagnostic channel.
+        private void add_keybinding (Meta.Display display, string name, Meta.KeyHandlerFunc handler) {
+            if (display.add_keybinding (name, settings, Meta.KeyBindingFlags.NONE, handler) == 0) {
+                warning ("xy: keybinding '%s' (%s) could not be registered — probably already taken",
+                    name, string.joinv (", ", settings.get_strv (name)));
+            }
         }
 
         // Named handler with an explicitly nullable window, for the same

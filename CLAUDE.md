@@ -75,7 +75,7 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   position rather than live pointer tracking) and, if the window landed within
   `FLOAT_EDGE_THRESHOLD` px of its monitor's work-area bottom edge, toggles floating
   instead of running the normal re-home path — see `Row.vala`'s floating notes below. The
-  `toggle-floating` keybinding (default Super+Escape — Super+F was already taken) drives
+  `toggle-floating` keybinding (default Super+backslash — Super+F was taken, and Super+Escape turned out to be swallowed before reaching the plugin) drives
   the same toggle from the keyboard, via `find_owning_row()` on the focused window.
 - **`Row.vala`** — one row = one monitor's tiled window order for one workspace. Holds
   `order` (a `GLib.List<weak Meta.Window>`), listens to `workspace.window_added`/
@@ -125,7 +125,11 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   isn't transient: a window stays in it — with no slot reserved and no repositioning at
   all, as if it weren't in `order` — until something explicitly clears it via
   `set_floating()`. That's toggled by dragging the window to its monitor's bottom edge (see
-  `Main.vala` above) or the `toggle-floating` keybinding, and also cleared as a side effect
+  `Main.vala` above) or the `toggle-floating` keybinding. On the way in, `shrink_on_float()`
+  gives a still-full-row-height window two thirds of the work area's height, centred
+  vertically (`Geometry.float_shrink_geometry()`), so it reads as lifted out of the row;
+  an interactive resize deliberately does *not* unfloat, since a floating window is meant to
+  be sized freely. Floating is also cleared as a side effect
   of `cycle_width()` (Super+R) or maximizing (`on_maximized_changed()`'s hook on
   `notify["maximized-horizontally"/"vertically"]`) — both read as "the user just did
   something that implies they want this window back in the row". A floating window stays

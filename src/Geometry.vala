@@ -64,6 +64,27 @@ namespace Gala.Plugins.Xy {
             return frame_y + frame_height >= area_y + area_height - threshold;
         }
 
+        // A window that was tiled is full work-area height, which reads as
+        // "still in the row" even once it floats. Shrinking it to a
+        // fraction of that height and centring it vertically makes the
+        // lift-out visible. Only applies to a window that really is (near
+        // enough) full height — a window already shorter than that has a
+        // height the user chose, so leave it alone: returns false and
+        // touches neither out parameter in that case.
+        public static bool float_shrink_geometry (int frame_height, int area_y, int area_height, double fraction,
+            int tolerance, out int new_height, out int new_y) {
+            new_height = frame_height;
+            new_y = area_y;
+
+            if (frame_height < area_height - tolerance) {
+                return false;
+            }
+
+            new_height = (int) Math.round (area_height * fraction);
+            new_y = area_y + (area_height - new_height) / 2;
+            return true;
+        }
+
         // True for any interactive resize grab, mouse or keyboard-driven,
         // including the vertical-only (N/S) and diagonal ops that
         // resize_delta_for_op() maps to no row-neighbor at all. Used to

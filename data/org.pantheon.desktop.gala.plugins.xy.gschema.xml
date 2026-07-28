@@ -22,9 +22,9 @@
       <summary>Cycle the focused window's width between 33%, 50%, and 67% of the monitor</summary>
     </key>
     <key type="as" name="toggle-floating">
-      <default><![CDATA[['<Super>Escape']]]></default>
+      <default><![CDATA[['<Super>backslash']]]></default>
       <summary>Toggle floating for the focused window</summary>
-      <description>A floating window is excluded from its row's tiling — it keeps whatever position and size it has and isn't moved by retile() — until it's unfloated again: by toggling this shortcut, by dragging it to the bottom edge of its monitor, by cycling its width (Super+R), or by maximizing it.</description>
+      <description>A floating window is excluded from its row's tiling — it keeps whatever position and size it has and isn't moved by retile() — until it's unfloated again: by toggling this shortcut, by dragging it to the bottom edge of its monitor, by cycling its width (Super+R), or by maximizing it. It is given two thirds of the work-area height, centred vertically, if it was full row height when it floated.</description>
     </key>
     <key type="as" name="excluded-app-ids">
       <default><![CDATA[['com.vandragt.sidewing']]]></default>

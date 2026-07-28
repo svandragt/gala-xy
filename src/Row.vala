@@ -309,50 +309,48 @@ namespace Gala.Plugins.Xy {
 
             if (value) {
                 floating.append (window);
+                shrink_on_float (window);
             } else {
                 floating.remove (window);
             }
 
-            set_float_shadow (window, value);
             queue_retile ();
         }
 
-        // Name the floating window's shadow effect so it can be found and
-        // removed again by the same key on unfloat — Clutter has no "is this
-        // effect mine" query beyond get_effect(name).
-        private const string FLOAT_SHADOW_NAME = "gala-xy-float-shadow";
+        // How tall a window is made when it floats out of the row, as a
+        // fraction of the monitor work area, and how many px short of full
+        // height still counts as "full height" (a frame can sit a pixel or
+        // two off after a retile).
+        private const double FLOAT_HEIGHT_FRACTION = 2.0 / 3.0;
+        private const int FLOAT_HEIGHT_TOLERANCE = 8;
 
-        // A floating window is lifted out of the row, so it gets a drop
-        // shadow to say so visually — the unfocused counterpart to
-        // FocusRingContent's muted border (see SPEC.md "Identifying a
-        // floating window"). Reuses Gala's own ShadowEffect with the same
-        // "window" style Gala draws around window clones in the
-        // multitasking view, so it matches the rest of the desktop rather
-        // than being a bespoke shadow.
-        private void set_float_shadow (Meta.Window window, bool value) {
-            unowned var actor = window.get_compositor_private () as Clutter.Actor;
-            if (actor == null) {
+        // See Geometry.float_shrink_geometry(): a just-floated window that
+        // still fills the row's full height doesn't look lifted out, so
+        // shrink it vertically and centre it. Width and x are left as they
+        // are — the window keeps its column position in the row it came
+        // from, which is where the user expects to find it.
+        private void shrink_on_float (Meta.Window window) {
+            var area = workspace.get_work_area_for_monitor (monitor);
+            var frame = window.get_frame_rect ();
+
+            int new_height, new_y;
+            if (!Geometry.float_shrink_geometry (frame.height, area.y, area.height, FLOAT_HEIGHT_FRACTION,
+                FLOAT_HEIGHT_TOLERANCE, out new_height, out new_y)) {
                 return;
             }
 
-            var existing = actor.get_effect (FLOAT_SHADOW_NAME);
-
-            if (!value) {
-                if (existing != null) {
-                    actor.remove_effect (existing);
-                }
-
-                return;
-            }
-
-            if (existing != null) {
-                return;
-            }
-
-            var scale = Gala.Utils.get_ui_scaling_factor (workspace.get_display (), monitor);
-            var shadow = new Gala.ShadowEffect ("window", scale);
-            actor.add_effect_with_name (FLOAT_SHADOW_NAME, shadow);
+            window.move_resize_frame (false, frame.x, new_y, frame.width, new_height);
         }
+
+        // No drop shadow is applied to a floating window, even though
+        // "elevation" would be the obvious visual cue. Gala.ShadowEffect
+        // paints around the *actor's* bounds, and a window actor's bounds
+        // include the client's own invisible CSD shadow margins — so the
+        // shadow rendered as a detached rounded box with a gap between it
+        // and the visible window edge. Clutter effects have no way to inset
+        // that to the frame rect, so the muted focus border in
+        // FocusRing.vala is the only floating marker (see SPEC.md
+        // "Identifying a floating window").
 
         // Backing store for excluded-app-ids/excluded-title-keywords (see
         // gschema). Lazily created rather than at field-init time: Row
@@ -660,7 +658,10 @@ namespace Gala.Plugins.Xy {
         // queue_retile() is cheap here since retile() no-ops a
         // move_resize_frame for any window already in place.
         private void correct_height_mismatch (Meta.Window window) {
-            if (shutting_down || !contains (window)) {
+            // A floating window is deliberately not full height (see
+            // shrink_on_float()), so its every size change would otherwise
+            // look like a mismatch worth logging and retiling for.
+            if (shutting_down || !contains (window) || is_floating (window)) {
                 return;
             }
 

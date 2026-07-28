@@ -76,7 +76,7 @@ Rules:
 | `Super+[` / `Super+]` | Move focus to the window left / right in the row |
 | `Super+Shift+[` / `Super+Shift+]` | Move the focused window itself left / right in the row |
 | `Super+R` | Cycle the focused window's width through 33%, 50%, 67% of the monitor |
-| `Super+Escape` | Float / unfloat the focused window |
+| `Super+\` | Float / unfloat the focused window |
 
 - Focus movement **wraps**: stepping right from the last window in the row
   focuses the first, and stepping left from the first focuses the last. A row
@@ -132,6 +132,13 @@ to a drag or resize.
 - It is cleared by: toggling the shortcut again, dragging to the monitor's
   bottom edge again, cycling the window's width, or maximising it. The last
   two count as "the user has signalled they want it back in the row".
+  Resizing a floating window by dragging its edge does **not** unfloat it —
+  a floating window is meant to be sized freely.
+- A window that floats out of the row at full row height is shrunk to two
+  thirds of the work-area height and centred vertically, so it visibly sits
+  above the row rather than in it. Its width and horizontal position are
+  kept. A window that was already shorter than full height keeps the height
+  the user gave it.
 - A floating window still participates in keyboard focus and reorder, and is
   skipped when a neighbour is needed for resize or width cycling (the same
   way a minimised or maximised neighbour already is).
@@ -149,16 +156,18 @@ to a drag or resize.
 ### Identifying a floating window
 
 A floating window is otherwise indistinguishable from a tiled one, so it is
-marked two ways:
+marked:
 
-- **Elevation** — a floating window gets a drop shadow, reinforcing that it
-  sits above the row rather than in it. This is visible whether or not the
-  window has focus.
 - **Muted border** — when a floating window has focus, its border is drawn
   dashed and dimmed instead of solid, so the focus indicator itself says
   "this one isn't in the row".
-- Both marks appear the moment a window starts floating and disappear the
+- The mark appears the moment a window starts floating and disappears the
   moment it stops, however it was floated or unfloated.
+
+A drop shadow was tried as a second, focus-independent mark and dropped: the
+compositor's shadow effect paints around the window actor's bounds, which
+include the client's own invisible shadow margins, so it rendered as a
+detached box floating clear of the window edge.
 
 ## 8. Settings
 

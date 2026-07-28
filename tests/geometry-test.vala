@@ -134,6 +134,28 @@ void test_is_dropped_near_bottom_edge_accounts_for_area_offset () {
     assert (!Geometry.is_dropped_near_bottom_edge (1600, 100, 900, 900, 10));
 }
 
+void test_float_shrink_geometry_shrinks_and_centres_a_full_height_window () {
+    int height, y;
+    assert (Geometry.float_shrink_geometry (1000, 40, 1000, 2.0 / 3.0, 8, out height, out y));
+    assert (height == 667);
+    // Equal gap above and below: (1000 - 667) / 2 = 166, offset by area.y.
+    assert (y == 206);
+}
+
+void test_float_shrink_geometry_treats_near_full_height_as_full_height () {
+    int height, y;
+    // A few px short of the work area still counts — a retiled frame can
+    // land marginally off.
+    assert (Geometry.float_shrink_geometry (995, 0, 1000, 2.0 / 3.0, 8, out height, out y));
+    assert (height == 667);
+}
+
+void test_float_shrink_geometry_leaves_an_already_short_window_alone () {
+    int height, y;
+    assert (!Geometry.float_shrink_geometry (500, 0, 1000, 2.0 / 3.0, 8, out height, out y));
+    assert (height == 500);
+}
+
 public static int main (string[] args) {
     Test.init (ref args);
 
@@ -170,6 +192,12 @@ public static int main (string[] args) {
         test_is_dropped_near_bottom_edge_false_outside_threshold);
     Test.add_func ("/geometry/is_dropped_near_bottom_edge/accounts_for_area_offset",
         test_is_dropped_near_bottom_edge_accounts_for_area_offset);
+    Test.add_func ("/geometry/float_shrink_geometry/shrinks_and_centres_a_full_height_window",
+        test_float_shrink_geometry_shrinks_and_centres_a_full_height_window);
+    Test.add_func ("/geometry/float_shrink_geometry/treats_near_full_height_as_full_height",
+        test_float_shrink_geometry_treats_near_full_height_as_full_height);
+    Test.add_func ("/geometry/float_shrink_geometry/leaves_an_already_short_window_alone",
+        test_float_shrink_geometry_leaves_an_already_short_window_alone);
 
     return Test.run ();
 }
