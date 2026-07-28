@@ -218,17 +218,8 @@ namespace Gala.Plugins.Xy {
             }
 
             unowned var partner = row.neighbor (window, delta);
-            // Mirrors cycle_width()'s right_usable/left_usable checks: a
-            // maximized neighbor is still kept in Row.order (retile() just
-            // skips repositioning it), so row.neighbor() can hand back one
-            // here. Driving move_resize_frame() on it directly would fight
-            // Meta's own maximize state instead of the live drag mirroring
-            // cleanly like it does for an ordinary tiled neighbor. Guarding
-            // on minimized too even though a minimized window shouldn't be
-            // in order at all (see track_minimized_state()) — cheap and
-            // consistent with cycle_width()'s own belt-and-suspenders check.
-            if (partner == null || partner.minimized || Row.is_floating (partner) ||
-                partner.maximized_horizontally || partner.maximized_vertically) {
+            // Same rule cycle_width() applies — see Row.is_usable_neighbor().
+            if (!Row.is_usable_neighbor (partner)) {
                 return;
             }
 

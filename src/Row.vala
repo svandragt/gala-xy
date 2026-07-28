@@ -58,6 +58,29 @@ namespace Gala.Plugins.Xy {
             return floating.find (window) != null;
         }
 
+        // A maximized window fills its monitor by design, overlapping the
+        // rest of the row: retile() leaves it where it is, cycle_width()
+        // unmaximizes instead of resizing it, and no resize mirrors into it.
+        // Meta.Window.is_maximized() isn't in the vapi under HAS_MUTTER46,
+        // hence the two-flag check — kept in one place so the several
+        // callers can't drift apart on what "maximized" means.
+        public static bool is_maximized (Meta.Window window) {
+            return window.maximized_horizontally || window.maximized_vertically;
+        }
+
+        // Whether a row-neighbor can absorb the other side of a resize —
+        // shared by cycle_width() and Main's divider-drag handling, which
+        // must agree on this or the same neighbor would be driven by one
+        // and refused by the other. A floating or maximized neighbor is
+        // still in `order` (retile() just skips repositioning it), so
+        // neighbor() can hand one back here; driving its frame directly
+        // would fight the state the user put it in. Minimized windows
+        // shouldn't be in `order` at all (see track_minimized_state()) —
+        // checked anyway, cheaply.
+        public static bool is_usable_neighbor (Meta.Window? window) {
+            return window != null && !window.minimized && !is_floating (window) && !is_maximized (window);
+        }
+
         // Static across every Row: every window currently claimed by any
         // row, by identity. Once a window is claimed, its row membership
         // is authoritative and is NOT re-derived from live get_monitor()
@@ -598,7 +621,7 @@ namespace Gala.Plugins.Xy {
         }
 
         private void on_maximized_changed (Meta.Window window) {
-            if (is_floating (window) && (window.maximized_horizontally || window.maximized_vertically)) {
+            if (is_floating (window) && is_maximized (window)) {
                 set_floating (window, false);
             }
 
@@ -715,7 +738,7 @@ namespace Gala.Plugins.Xy {
             // leaves maximized windows alone anyway (see append()'s
             // maximized notify hooks). Unmaximizing snaps it back into its
             // row slot via that same hook instead of cycling its width here.
-            if (window.maximized_horizontally || window.maximized_vertically) {
+            if (is_maximized (window)) {
                 window.unmaximize (Meta.MaximizeFlags.BOTH);
                 return;
             }
@@ -741,39 +764,40 @@ namespace Gala.Plugins.Xy {
             // with nothing compensating at all.
             unowned var right = neighbor (window, 1);
             unowned var left = neighbor (window, -1);
-            bool right_usable = right != null && !right.minimized && !is_floating (right) &&
-                !right.maximized_horizontally && !right.maximized_vertically;
-            bool left_usable = left != null && !left.minimized && !is_floating (left) &&
-                !left.maximized_horizontally && !left.maximized_vertically;
 
-            if (delta != 0 && right_usable) {
-                var right_frame = right.get_frame_rect ();
+            unowned Meta.Window? partner = null;
+            // +1: the partner is on the right, so this window's left edge
+            // stays put and the shared edge moves right. -1: mirrored, this
+            // window's right edge stays put and the shared edge moves left.
+            int side = 0;
+            if (delta != 0 && is_usable_neighbor (right)) {
+                partner = right;
+                side = 1;
+            } else if (delta != 0 && is_usable_neighbor (left)) {
+                partner = left;
+                side = -1;
+            }
 
-                // Cap the resize to whatever the neighbor can actually give
-                // up: if shrinking it by the full delta would take it below
-                // the same floor divider-drag enforces, shrink it only down
-                // to that floor and grow this window by that reduced amount
-                // instead — otherwise the two would overlap.
-                int actual_delta = Geometry.cap_delta_to_min_width (right_frame.width, delta, MIN_NEIGHBOR_WIDTH);
-
-                if (actual_delta != 0) {
-                    window.move_resize_frame (false, frame.x, frame.y, frame.width + actual_delta, frame.height);
-                    right.move_resize_frame (false, right_frame.x + actual_delta, right_frame.y,
-                        right_frame.width - actual_delta, right_frame.height);
-                }
-            } else if (delta != 0 && left_usable) {
-                var left_frame = left.get_frame_rect ();
-
-                int actual_delta = Geometry.cap_delta_to_min_width (left_frame.width, delta, MIN_NEIGHBOR_WIDTH);
-
-                if (actual_delta != 0) {
-                    window.move_resize_frame (false, frame.x - actual_delta, frame.y,
-                        frame.width + actual_delta, frame.height);
-                    left.move_resize_frame (false, left_frame.x, left_frame.y,
-                        left_frame.width - actual_delta, left_frame.height);
-                }
-            } else {
+            if (partner == null) {
                 window.move_resize_frame (false, frame.x, frame.y, new_width, frame.height);
+                queue_retile ();
+                return;
+            }
+
+            var partner_frame = partner.get_frame_rect ();
+
+            // Cap the resize to whatever the neighbor can actually give up:
+            // if shrinking it by the full delta would take it below the same
+            // floor divider-drag enforces, shrink it only down to that floor
+            // and grow this window by that reduced amount instead —
+            // otherwise the two would overlap.
+            int actual_delta = Geometry.cap_delta_to_min_width (partner_frame.width, delta, MIN_NEIGHBOR_WIDTH);
+
+            if (actual_delta != 0) {
+                window.move_resize_frame (false, side > 0 ? frame.x : frame.x - actual_delta, frame.y,
+                    frame.width + actual_delta, frame.height);
+                partner.move_resize_frame (false, side > 0 ? partner_frame.x + actual_delta : partner_frame.x,
+                    partner_frame.y, partner_frame.width - actual_delta, partner_frame.height);
             }
 
             queue_retile ();
@@ -863,7 +887,7 @@ namespace Gala.Plugins.Xy {
                 // and minimizing out-of-view windows was rejected as a
                 // replacement.
                 int target_x = int.max (area.x, int.min (x, max_x - frame.width));
-                bool is_maximized = window.maximized_horizontally || window.maximized_vertically;
+                bool maximized = is_maximized (window);
 
                 // Still counts toward layout (it keeps its slot in the
                 // row), but skip actually moving it: retile() can run for
@@ -877,14 +901,14 @@ namespace Gala.Plugins.Xy {
                 // would just fight Meta's own maximize. It snaps back into
                 // place on unmaximize instead (see append()'s notify hooks).
                 if (!window.minimized && window != grabbed_window && window != resize_partner &&
-                    window != resize_window && !is_maximized) {
+                    window != resize_window && !maximized) {
                     window.move_resize_frame (false, target_x, area.y, frame.width, area.height);
                 }
 
                 warning ("xy: Row#%d retile monitor=%d title=%s seq=%u x=%d target_x=%d width=%d minimized=%s grabbed=%s resizing=%s maximized=%s",
                     id, monitor, window.get_title (), window.get_stable_sequence (), x, target_x, frame.width,
                     window.minimized.to_string (), (window == grabbed_window).to_string (),
-                    (window == resize_window).to_string (), is_maximized.to_string ());
+                    (window == resize_window).to_string (), maximized.to_string ());
 
                 x += frame.width;
             });
