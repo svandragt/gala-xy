@@ -25,24 +25,62 @@ namespace Gala.Plugins.Xy {
         // behaviour. While a window is grabbed we ignore workspace signals
         // for it entirely and let Main's grab-op-end handling re-home it
         // once, after the drag genuinely finishes.
-        public static unowned Meta.Window? grabbed_window = null;
+        //
+        // Private with accessors, unlike the plain field this used to be, so
+        // setting it can't fall out of step with the `driven` exemption
+        // below — every move grab needs both, and there are half a dozen
+        // assignment sites in Main.
+        private static unowned Meta.Window? grabbed_window = null;
 
-        // Set by Main while a window's row-neighbor is being live-resized
-        // in tandem with an interactive edge drag (see Main's divider-style
-        // resize handling). Same rationale as grabbed_window: retile() must
-        // not reposition/resize this window mid-drag, since Main is already
-        // driving its frame directly to keep it glued to the dragged edge.
-        public static unowned Meta.Window? resize_partner = null;
+        public static unowned Meta.Window? get_grabbed_window () {
+            return grabbed_window;
+        }
 
-        // Set by Main while the window itself (not its neighbor — see
-        // resize_partner above) is under an active interactive resize grab,
-        // including vertical-only (N/S) and diagonal resizes that have no
-        // row-neighbor to mirror into at all. Without this, a stray retile
-        // mid-drag — e.g. correct_height_mismatch() reacting to the
-        // window's own live height change during a corner-drag — would
-        // snap the window back into its row slot and fight the user's own
-        // resize, the same problem grabbed_window solves for a live move.
-        public static unowned Meta.Window? resize_window = null;
+        public static void set_grabbed_window (Meta.Window? window) {
+            if (grabbed_window != null) {
+                set_driven (grabbed_window, false);
+            }
+
+            grabbed_window = window;
+
+            if (window != null) {
+                set_driven (window, true);
+            }
+        }
+
+        // Windows whose frame Main is driving directly right now, so
+        // retile() must leave them exactly where they are. Three cases, all
+        // the same rule ("don't fight the pointer", SPEC.md section 5) and
+        // previously three separate statics:
+        //
+        //  - the window under a live move grab (also grabbed_window above,
+        //    which stays separate because suppressing workspace churn is a
+        //    question about that one specific window, not about exemption);
+        //  - the window under a live resize grab, including vertical-only
+        //    and corner resizes with no row-neighbor to mirror into — a
+        //    stray retile mid-drag (e.g. correct_height_mismatch() reacting
+        //    to the window's own live height change) would otherwise snap
+        //    it back into its slot;
+        //  - the row-neighbor being mirrored into during a divider resize,
+        //    whose frame Main drives to keep it glued to the dragged edge.
+        //
+        // All three keep their slot in `order` — unlike `floating` below,
+        // which is exempt *and* gives up its slot.
+        private static GLib.List<weak Meta.Window> driven = new GLib.List<weak Meta.Window> ();
+
+        public static void set_driven (Meta.Window window, bool value) {
+            if (value) {
+                if (driven.find (window) == null) {
+                    driven.append (window);
+                }
+            } else {
+                driven.remove (window);
+            }
+        }
+
+        public static bool is_driven (Meta.Window window) {
+            return driven.find (window) != null;
+        }
 
         // Windows currently floating: excluded from this row's tiling
         // entirely — retile() skips them with no slot reserved, so
@@ -435,6 +473,17 @@ namespace Gala.Plugins.Xy {
             });
         }
 
+        // The two hooks that let a window this row currently *refuses* still
+        // join later — minimized→shown, and grown past min-tileable-size.
+        // Both add paths need them, and force_add_window() used to wire only
+        // the first: a window re-homed here by a drag never got the size
+        // hook, so if it was dropped while below the threshold it could
+        // never join the row by growing.
+        private void track_window_state (Meta.Window window) {
+            track_minimized_state (window);
+            track_size_state (window);
+        }
+
         public void add_window (Meta.Window window) {
             if (shutting_down) {
                 return;
@@ -454,8 +503,7 @@ namespace Gala.Plugins.Xy {
                 return;
             }
 
-            track_minimized_state (window);
-            track_size_state (window);
+            track_window_state (window);
 
             warning ("xy: Row#%d add_window check title=%s seq=%u row_monitor=%d window.get_monitor=%d tileable=%s workspace_index=%d",
                 id, window.get_title (), window.get_stable_sequence (), monitor, window.get_monitor (),
@@ -479,7 +527,7 @@ namespace Gala.Plugins.Xy {
                 return;
             }
 
-            track_minimized_state (window);
+            track_window_state (window);
 
             if (!is_tileable (window) || contains (window)) {
                 return;
@@ -547,6 +595,11 @@ namespace Gala.Plugins.Xy {
                     minimize_tracked.remove (window);
                     size_tracked.remove (window);
                     floating.remove (window);
+                    // A window closed mid-drag never reaches Main's
+                    // grab-op-end clearing, and a stale entry here would
+                    // exempt whatever object later lands at the same
+                    // address from ever being retiled.
+                    set_driven (window, false);
                     force_remove_window (window);
                 });
                 window.size_changed.connect (() => correct_height_mismatch (window));
@@ -661,15 +714,35 @@ namespace Gala.Plugins.Xy {
             queue_retile ();
         }
 
-        // Move the focused window one slot left (-1) or right (+1).
-        public void move (Meta.Window window, int delta) {
+        // The slot `delta` steps left (-1) or right (+1) of the given
+        // window's own slot, or -1 if the window isn't in this row or the
+        // step falls off an end. With wrap, an end step lands on the
+        // opposite end instead: the row is a loop.
+        private int step_index (Meta.Window window, int delta, bool wrap) {
             int index = order.index (window);
-            if (index < 0) {
-                return;
+            int length = (int) order.length ();
+            if (index < 0 || length == 0) {
+                return -1;
             }
 
             int target = index + delta;
-            if (target < 0 || target >= (int) order.length ()) {
+
+            if (wrap) {
+                // GLib's % keeps the sign of the dividend, so a -1 step off
+                // the left end needs the extra + length to land on the last
+                // window rather than a negative index.
+                return ((target % length) + length) % length;
+            }
+
+            return (target < 0 || target >= length) ? -1 : target;
+        }
+
+        // Move the focused window one slot left (-1) or right (+1). Stops at
+        // either end — reordering deliberately doesn't wrap the way focus
+        // does (SPEC.md section 5).
+        public void move (Meta.Window window, int delta) {
+            int target = step_index (window, delta, false);
+            if (target < 0) {
                 return;
             }
 
@@ -678,40 +751,23 @@ namespace Gala.Plugins.Xy {
             queue_retile ();
         }
 
-        // The window one slot left (-1) or right (+1) of the given window
-        // in this row, for keyboard focus switching. Null at either end.
+        // The window one slot left (-1) or right (+1) of the given window in
+        // this row. Null at either end: used by the resize and cycle-width
+        // paths, where "grow into the window on that side" must not reach
+        // across the whole row to the far end.
         public unowned Meta.Window? neighbor (Meta.Window window, int delta) {
-            int index = order.index (window);
-            if (index < 0) {
-                return null;
-            }
+            int target = step_index (window, delta, false);
 
-            int target = index + delta;
-            if (target < 0 || target >= (int) order.length ()) {
-                return null;
-            }
-
-            return order.nth_data (target);
+            return target < 0 ? null : order.nth_data (target);
         }
 
-        // Like neighbor(), but wrapping around the ends of the row: one step
-        // right of the last window is the first, and vice versa. Kept
-        // separate from neighbor() deliberately — wrapping is right for
-        // keyboard focus (a row is a loop you can cycle through) but wrong
-        // for the resize/cycle-width callers, where "grow into the window on
-        // that side" must not reach across the whole row to the far end.
+        // Like neighbor(), but wrapping around the ends of the row — right
+        // of the last window is the first, and vice versa. Keyboard focus
+        // uses this one; see move() on why reordering doesn't.
         public unowned Meta.Window? neighbor_wrapping (Meta.Window window, int delta) {
-            int index = order.index (window);
-            int length = (int) order.length ();
-            if (index < 0 || length == 0) {
-                return null;
-            }
+            int target = step_index (window, delta, true);
 
-            // GLib's % keeps the sign of the dividend, so a -1 step off the
-            // left end needs the extra + length to land on the last window.
-            int target = ((index + delta) % length + length) % length;
-
-            return order.nth_data (target);
+            return target < 0 ? null : order.nth_data (target);
         }
 
         // Cycle the focused window's width through fixed fractions of the
@@ -900,15 +956,14 @@ namespace Gala.Plugins.Xy {
                 // rest of the row, and forcing it back into its slot here
                 // would just fight Meta's own maximize. It snaps back into
                 // place on unmaximize instead (see append()'s notify hooks).
-                if (!window.minimized && window != grabbed_window && window != resize_partner &&
-                    window != resize_window && !maximized) {
+                if (!window.minimized && !is_driven (window) && !maximized) {
                     window.move_resize_frame (false, target_x, area.y, frame.width, area.height);
                 }
 
-                warning ("xy: Row#%d retile monitor=%d title=%s seq=%u x=%d target_x=%d width=%d minimized=%s grabbed=%s resizing=%s maximized=%s",
+                warning ("xy: Row#%d retile monitor=%d title=%s seq=%u x=%d target_x=%d width=%d minimized=%s grabbed=%s driven=%s maximized=%s",
                     id, monitor, window.get_title (), window.get_stable_sequence (), x, target_x, frame.width,
                     window.minimized.to_string (), (window == grabbed_window).to_string (),
-                    (window == resize_window).to_string (), maximized.to_string ());
+                    is_driven (window).to_string (), maximized.to_string ());
 
                 x += frame.width;
             });

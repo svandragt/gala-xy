@@ -15,7 +15,7 @@ namespace Gala.Plugins.Xy {
 
         // Tracks the window we're waiting to "settle" after a drop: the
         // one whose row we've already re-homed it into, but which retile()
-        // is still deliberately skipping because Row.grabbed_window is
+        // is still deliberately skipping because Row's grabbed window is
         // still set. See restart_settle_timer().
         private unowned Meta.Window? settle_window = null;
         private unowned Row? settle_row = null;
@@ -33,6 +33,13 @@ namespace Gala.Plugins.Xy {
         private const int FLOAT_EDGE_THRESHOLD = 12;
         private unowned Meta.Window? resize_window = null;
         private unowned Meta.Window? resize_partner = null;
+        // The window under an interactive resize grab for the whole duration
+        // of that grab, whether or not begin_divider_resize() found a
+        // neighbor to mirror into (resize_window above is only set in the
+        // latter case). Kept so grab-op-end knows whose retile exemption to
+        // lift — a vertical-only or corner resize has no partner but still
+        // needs one final retile to snap the window back into its slot.
+        private unowned Meta.Window? resizing_window = null;
         private int resize_delta = 0;
         // The partner's edge that must stay fixed while its facing edge
         // tracks the dragged window, captured once at grab-begin.
@@ -185,22 +192,23 @@ namespace Gala.Plugins.Xy {
             }
 
             if (op == Meta.GrabOp.MOVING || op == Meta.GrabOp.MOVING_UNCONSTRAINED) {
-                // See Row.grabbed_window: while this is set, rows ignore
-                // workspace add/remove churn for this window instead of
-                // retiling it mid-drag and fighting the user's own movement.
-                Row.grabbed_window = window;
+                // Rows ignore workspace add/remove churn for the grabbed
+                // window instead of retiling it mid-drag and fighting the
+                // user's own movement, and the setter exempts it from
+                // retile() too — see Row.set_grabbed_window().
+                Row.set_grabbed_window (window);
                 return;
             }
 
             if (Geometry.is_resize_op (op)) {
-                // See Row.resize_window: exempts the window itself from
-                // retile() for the whole grab, independent of whether
-                // begin_divider_resize() below finds a neighbor to mirror
-                // the drag into (e.g. a vertical-only or corner resize with
-                // no usable partner on that side still needs this, or the
+                // Exempt the window itself from retile() for the whole grab,
+                // independent of whether begin_divider_resize() below finds a
+                // neighbor to mirror the drag into: a vertical-only or corner
+                // resize with no usable partner still needs this, or the
                 // window's own live height change mid-drag would trigger a
-                // stray retile that snaps it back into its row slot).
-                Row.resize_window = window;
+                // stray retile that snaps it back into its row slot.
+                resizing_window = window;
+                Row.set_driven (window, true);
             }
 
             begin_divider_resize (window, op);
@@ -226,9 +234,9 @@ namespace Gala.Plugins.Xy {
             resize_window = window;
             resize_partner = partner;
             resize_delta = delta;
-            // See Row.resize_partner: stops retile() from repositioning the
-            // partner mid-drag, since we're already driving its frame here.
-            Row.resize_partner = partner;
+            // Stops retile() from repositioning the partner mid-drag, since
+            // we're already driving its frame here — see Row.set_driven().
+            Row.set_driven (partner, true);
 
             var partner_frame = partner.get_frame_rect ();
             resize_partner_far_x = delta > 0 ? partner_frame.x + partner_frame.width : partner_frame.x;
@@ -274,8 +282,6 @@ namespace Gala.Plugins.Xy {
                 resize_partner.disconnect (resize_partner_unmanaged_id);
             }
 
-            Row.resize_partner = null;
-
             // Final settle: the partner's frame is already correct from the
             // live drag, but a retile re-derives every window's x offset in
             // case rounding left the row's internal bookkeeping slightly off.
@@ -283,6 +289,8 @@ namespace Gala.Plugins.Xy {
             // unmanaged hook has already dropped it from its row by the
             // time this runs, so find_owning_row() safely finds nothing.
             if (resize_partner != null) {
+                Row.set_driven (resize_partner, false);
+
                 unowned var row = find_owning_row (resize_partner);
                 if (row != null) {
                     row.retile ();
@@ -307,14 +315,17 @@ namespace Gala.Plugins.Xy {
                 end_divider_resize ();
             }
 
-            // See Row.resize_window: clear the exemption now that the grab
-            // is over, and force one more retile so the window snaps fully
-            // into its row slot — needed even when there was no divider
-            // partner at all (e.g. a vertical-only or corner resize that
-            // begin_divider_resize() found no neighbor for).
-            if (Row.resize_window != null && Row.resize_window == window) {
-                unowned var resized = Row.resize_window;
-                Row.resize_window = null;
+            // Clear the resize exemption now that the grab is over, and force
+            // one more retile so the window snaps fully into its row slot —
+            // needed even when there was no divider partner at all (e.g. a
+            // vertical-only or corner resize that begin_divider_resize()
+            // found no neighbor for). Cleared unconditionally rather than
+            // only when it matches this grab's window: a stale exemption
+            // would leave that window untileable for the rest of the session.
+            if (resizing_window != null) {
+                unowned var resized = resizing_window;
+                resizing_window = null;
+                Row.set_driven (resized, false);
 
                 unowned var row = find_owning_row (resized);
                 if (row != null) {
@@ -323,13 +334,12 @@ namespace Gala.Plugins.Xy {
             }
 
             if (window == null) {
-                Row.grabbed_window = null;
-                Row.resize_window = null;
+                Row.set_grabbed_window (null);
                 return;
             }
 
             if (op != Meta.GrabOp.MOVING && op != Meta.GrabOp.MOVING_UNCONSTRAINED) {
-                Row.grabbed_window = null;
+                Row.set_grabbed_window (null);
                 return;
             }
 
@@ -344,7 +354,7 @@ namespace Gala.Plugins.Xy {
                     // instead of an ordinary re-home: no cross-row move, no
                     // settle wait, just flip the flag and let Row.retile()
                     // (queued by set_floating()) react.
-                    Row.grabbed_window = null;
+                    Row.set_grabbed_window (null);
                     toggle_floating (window);
                     return GLib.Source.REMOVE;
                 }
@@ -394,7 +404,7 @@ namespace Gala.Plugins.Xy {
             }
         }
 
-        // Row.grabbed_window deliberately stays set through on_window_dropped
+        // Row's grabbed window deliberately stays set through on_window_dropped
         // and beyond: Mutter's workspace add/remove churn for the dropped
         // window keeps firing for a while *after* grab-op-end too, not just
         // during the live drag, and would otherwise still fight our own
@@ -416,8 +426,8 @@ namespace Gala.Plugins.Xy {
             settle_timeout_id = GLib.Timeout.add (120, () => {
                 settle_timeout_id = 0;
 
-                if (Row.grabbed_window == settle_window) {
-                    Row.grabbed_window = null;
+                if (Row.get_grabbed_window () == settle_window) {
+                    Row.set_grabbed_window (null);
                 }
 
                 // retile() deliberately skips moving the still-grabbed
@@ -444,9 +454,9 @@ namespace Gala.Plugins.Xy {
             // workspace than the row it was tracked under: move it to the
             // right row first. Checked across every row, not just ones on
             // the new workspace — a drag that also changes workspace fires
-            // the old workspace's window_removed while Row.grabbed_window is
+            // the old workspace's window_removed while the grabbed window is
             // still set, which remove_window() deliberately ignores (see
-            // Row.grabbed_window), so the old row never lets go of the
+            // Row.set_grabbed_window()), so the old row never lets go of the
             // window on its own. Without this, the window stays in
             // Row.claimed forever and can never be tiled again anywhere.
             // (Deliberately not done on window_entered_monitor, which fires

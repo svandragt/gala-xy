@@ -113,6 +113,16 @@ Rules:
   manager's own churn has stopped — not on a fixed delay, and not
   repeatedly.
 
+### One deliberate exception: newly opened windows
+
+Some applications restore their own remembered position and size a moment
+*after* the window appears, asynchronously, silently winning the race against
+the initial layout. There is no signal to wait for here, so a newly opened
+window is re-laid-out a couple of times over the first second after it opens.
+This is the one place the product accepts fixed timing rather than waiting for
+a settled state, and it applies only to windows that have just opened — never
+to a drag or resize.
+
 ## 6. Floating windows
 
 - A floating window is fully exempt from tiling: it keeps its own position and
