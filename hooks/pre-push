@@ -1,7 +1,0 @@
-#!/bin/sh
-# Runs the Geometry test suite before allowing a push — see CLAUDE.md's
-# "no automated test suite" note for why this is the only automated check
-# there is; everything else is verified live. Installed via `make
-# install-hooks` since .git/hooks isn't tracked by git.
-set -e
-exec make test

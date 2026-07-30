@@ -34,29 +34,13 @@ install_data(
 shared_library('gala-xy',
     files(
         'src/Main.vala',
-        'src/Row.vala',
         'src/FocusRing.vala',
-        'src/Geometry.vala',
     ),
     dependencies: [gala_dep, dependency('gee-0.8'), dependency('gio-unix-2.0'), dependency('pango'), dependency('pangocairo'), dependency('gdk-pixbuf-2.0'), dependency('granite-7'), dependency('gtk4')] + mutter_dep,
     install: true,
     install_dir: plugins_dir,
     install_rpath: mutter_typelib_dir,
 )
-
-# Pure width/delta math (src/Geometry.vala) is the only part of the plugin
-# that doesn't need a live Mutter session to exercise, so it's the only
-# part with an automated test — see tests/geometry-test.vala and
-# CLAUDE.md's "no automated test suite" note for why the rest is verified
-# live instead.
-geometry_test_exe = executable('geometry-test',
-    files(
-        'src/Geometry.vala',
-        'tests/geometry-test.vala',
-    ),
-    dependencies: mutter_dep + [dependency('pangocairo')],
-)
-test('geometry', geometry_test_exe)
 
 # Switchboard settings plug: a GUI over the same gsettings keys the plugin
 # itself reads (keybindings + window-exclusion lists), nothing more.

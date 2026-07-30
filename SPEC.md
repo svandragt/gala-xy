@@ -4,6 +4,14 @@ This is the behavioural source of truth for gala-xy. It describes *what the
 product does*, in product terms, with no reference to code. Changes to
 behaviour should be made here first, then implemented.
 
+> **Current status: the tiling layer is not implemented.** It was built,
+> caused too many problems in daily use, and was removed pending a rethink of
+> the layout model. What ships today is section 7's focus indicator only —
+> minus the floating marks — plus the exclusion lists (which now decide who
+> gets a border rather than who gets tiled). Everything else below describes
+> the intended product, not current behaviour. The removed implementation is
+> in the git history if it's worth reviving.
+
 ## 1. Purpose and scope
 
 - gala-xy gives elementaryOS (Pantheon) a PaperWM-style horizontal tiling
