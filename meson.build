@@ -1,4 +1,4 @@
-project('gala-xy', 'vala', 'c', version: '0.1.0')
+project('gala-xy', 'vala', 'c', version: '0.2.0')
 
 gnome = import('gnome')
 
@@ -35,6 +35,7 @@ shared_library('gala-xy',
     files(
         'src/Main.vala',
         'src/FocusRing.vala',
+        'src/WindowSwitcher.vala',
     ),
     dependencies: [gala_dep, dependency('gee-0.8'), dependency('gio-unix-2.0'), dependency('pango'), dependency('pangocairo'), dependency('gdk-pixbuf-2.0'), dependency('granite-7'), dependency('gtk4')] + mutter_dep,
     install: true,

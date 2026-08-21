@@ -12,7 +12,8 @@ reorder/focus-neighbour/cycle-width keybindings, drag-to-rehome, divider resize,
 was removed wholesale — the tiling model needs rethinking. See git history before
 `8d49fea` for the previous implementation and the reasoning behind its various hacks.
 
-What's left: a focus ring around the focused window, nothing else.
+What's left: a focus ring around the focused window, plus Super+Left/Right to switch
+focus between windows (positional order, not tiling).
 
 ## Build / install / reload
 
@@ -52,11 +53,18 @@ Verify changes by installing, reloading, and reading `journalctl _COMM=gala | gr
 
 ## Architecture
 
-Two Vala files compiled into one `libgala-xy.so`, registered via `register_plugin()`
+Three Vala files compiled into one `libgala-xy.so`, registered via `register_plugin()`
 at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` load priority).
 
-- **`Main.vala`** — nothing but the plugin shell: construct `FocusRing` on `initialize()`,
-  destroy it on `destroy()`.
+- **`Main.vala`** — nothing but the plugin shell: construct `FocusRing` and
+  `WindowSwitcher` on `initialize()`, destroy them on `destroy()`.
+- **`WindowSwitcher.vala`** — registers the `switch-left`/`switch-right` keybindings
+  (defaults Super+Left/Right) via `display.add_keybinding()` against the plugin's own
+  gschema. On each press it sorts the active workspace's `get_tab_list(NORMAL)` windows
+  left-to-right by frame-rect centre (not the list's MRU order — MRU keeps the focused
+  window at index 0, so with discrete presses one direction just ping-pongs between two
+  windows) and activates the neighbour, wrapping at the ends. Skips chrome via the shared
+  `FocusRing.is_chrome_window()` (why it's `internal`, not `private`).
 - **`FocusRing.vala`** — a `Gala.CanvasActor` subclass stroking a rounded-rect border (via
   `Gala.Drawing.Utilities.cairo_rounded_rectangle`, not `Clutter.Canvas`, which the vapi
   excludes as of Mutter 46) tracking the focused window's frame rect via `do_focus_window` +
@@ -77,9 +85,10 @@ auto-inserted null assertion crashes Gala.
 `switchboard-plug/` is a separate build target (`libxy-settings.so`) from the Gala
 plugin — a Switchboard plug, not part of `libgala-xy.so`, installed into Switchboard's
 `personal` category. It has no logic of its own: it's a GTK4 view over the same
-`org.pantheon.desktop.gala.plugins.xy` gschema the plugin itself reads (just the two
-exclusion lists now), using `GLib.Settings.bind_with_mapping()` to show/edit each `as`
-(string array) key as a single comma-separated `Gtk.Entry`. The mapping delegates use
+`org.pantheon.desktop.gala.plugins.xy` gschema the plugin itself reads (two exclusion
+lists on the Exclusions page, the two switch keybindings on the Shortcuts page), using
+`GLib.Settings.bind_with_mapping()` to show/edit each `as` (string array) key as a single
+comma-separated `Gtk.Entry` (both pages share a `StrvEntryPage` base for that binding). The mapping delegates use
 GSettings' plain-C-function-pointer form (`SettingsBindGetMappingShared`/
 `...SetMappingShared`, `has_target = false` in the vapi) rather than closures, since that's
 the only overload the vapi exposes — hence they're `static` methods taking an unused

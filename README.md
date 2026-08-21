@@ -3,27 +3,35 @@
 A small plugin for [Gala](https://github.com/elementary/gala), the window
 manager behind elementaryOS's Pantheon desktop.
 
-Right now all it does is draw a highlighted border around the focused window,
-so you can always tell which window has focus at a glance. It does not move,
-resize, or reorder anything.
-
-It started as a [PaperWM](https://github.com/paperwm/PaperWM)-style horizontal
-tiling plugin. That layer caused more trouble than it was worth and has been
-removed for now while the layout model gets rethought — see the git history if
-you want it back.
+It draws a highlighted border around the focused window so you can always tell
+which window has focus at a glance, and it switches focus between windows with
+Super+Left and Super+Right. It does not move, resize, or reorder anything.
 
 ## What it does
 
 - The focused window gets a highlighted border, coloured to match your
   System Settings → Appearance accent colour, updating live if you change it.
+- Super+Left and Super+Right move focus between the open windows on the current
+  workspace, ordered left to right by on-screen position and wrapping at the
+  ends. Panels, docks, and excluded windows are skipped.
 - Panels, docks, and similar chrome don't get a border (see below).
+
+## Shortcuts
+
+The switch shortcuts default to Super+Left and Super+Right. Change them via
+**System Settings → Window Behaviour → Shortcuts**, or with `gsettings`:
+
+```
+gsettings set org.pantheon.desktop.gala.plugins.xy switch-left "['<Super>Left']"
+gsettings set org.pantheon.desktop.gala.plugins.xy switch-right "['<Super>Right']"
+```
 
 ## Excluding windows
 
 Wingpanel and Plank are excluded by default, matched by a substring in their
 window title; anything else can be added the same way, or by GTK application
 ID if the app has more than one window and only some should be excluded —
-either via **System Settings → Tiling**, or with `gsettings`:
+either via **System Settings → Window Behaviour → Exclusions**, or with `gsettings`:
 
 ```
 gsettings set org.pantheon.desktop.gala.plugins.xy excluded-title-keywords "['wingpanel', 'plank', 'some-substring']"

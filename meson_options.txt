@@ -1,3 +1,3 @@
 option('gala_vapi_dir', type: 'string',
-    value: '/home/sander/src/gala-8.5.1+r3055+pkg132~ubuntu8.1/vapi',
+    value: '/home/sander/src/gala-8.5.1+r3055+pkg132~ubuntu8.1+ep1/vapi',
     description: 'Directory containing libmutter-14.vapi, as shipped in a Gala source checkout (Ubuntu ships no standalone libmutter vapi package).')

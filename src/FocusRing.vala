@@ -65,7 +65,7 @@ namespace Gala.Plugins.Xy {
         // in the title.
         private static GLib.Settings? exclusion_settings = null;
 
-        private static bool is_chrome_window (Meta.Window window) {
+        internal static bool is_chrome_window (Meta.Window window) {
             if (exclusion_settings == null) {
                 exclusion_settings = new GLib.Settings ("org.pantheon.desktop.gala.plugins.xy");
             }

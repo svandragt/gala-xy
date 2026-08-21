@@ -8,13 +8,13 @@ namespace Xy {
 
         public SettingsPlug () {
             var settings = new Gee.TreeMap<string, string?> ();
-            settings.set ("xy", "Tiling");
+            settings.set ("xy", "Window Behaviour");
 
             Object (
                 category: Switchboard.Plug.Category.PERSONAL,
                 code_name: "io.elementary.settings.xy",
-                display_name: "Tiling",
-                description: "Horizontal window tiling shortcuts and exclusions",
+                display_name: "Window Behaviour",
+                description: "Window switching shortcuts and focus-ring exclusions",
                 icon: "preferences-desktop-workspaces",
                 supported_settings: settings
             );

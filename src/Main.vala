@@ -1,22 +1,26 @@
 namespace Gala.Plugins.Xy {
     /*
-     * Currently the plugin does nothing but draw a focus ring around the
-     * focused window. The horizontal-tiling layer (rows, retiling, reorder/
-     * focus-neighbor/cycle-width keybindings, drag-to-rehome, divider
-     * resize, floating) was removed wholesale — see git history for it if
-     * the tiling model gets rethought.
+     * The plugin draws a focus ring around the focused window (FocusRing)
+     * and switches focus between windows with Super+Left/Right in MRU order
+     * (WindowSwitcher). The old horizontal-tiling layer (rows, retiling,
+     * reorder/cycle-width keybindings, drag-to-rehome, divider resize,
+     * floating) was removed wholesale — see git history for it if the tiling
+     * model gets rethought.
      */
     public class Main : Gala.Plugin {
         private Gala.WindowManager? wm = null;
         private FocusRing focus_ring;
+        private WindowSwitcher window_switcher;
 
         public override void initialize (Gala.WindowManager wm) {
             this.wm = wm;
             focus_ring = new FocusRing (wm);
+            window_switcher = new WindowSwitcher (wm);
         }
 
         public override void destroy () {
             focus_ring.destroy ();
+            window_switcher.destroy ();
         }
     }
 }
