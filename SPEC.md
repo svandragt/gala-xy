@@ -41,9 +41,10 @@ behaviour should be made here first, then implemented.
 - Two keyboard shortcuts move focus between the open windows on the current
   workspace: one steps to the next window on the left, the other to the next on
   the right.
-- Windows are ordered left to right by their on-screen position, and the
+- Windows are visited in most-recently-used order (like Alt+Tab), and the
   shortcuts wrap around at the ends, so repeatedly pressing either one visits
-  every window in turn.
+  every window in turn. The order stays fixed while switching and only
+  refreshes when focus changes by other means (a click, a new window).
 - Excluded windows (see below) are skipped, the same set that gets no border.
 - The shortcuts default to Super+Left and Super+Right and are rebindable.
 

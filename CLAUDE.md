@@ -13,7 +13,7 @@ was removed wholesale — the tiling model needs rethinking. See git history bef
 `8d49fea` for the previous implementation and the reasoning behind its various hacks.
 
 What's left: a focus ring around the focused window, plus Super+Left/Right to switch
-focus between windows (positional order, not tiling).
+focus between windows (most-recently-used order, not tiling).
 
 ## Build / install / reload
 
@@ -60,11 +60,15 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   `WindowSwitcher` on `initialize()`, destroy them on `destroy()`.
 - **`WindowSwitcher.vala`** — registers the `switch-left`/`switch-right` keybindings
   (defaults Super+Left/Right) via `display.add_keybinding()` against the plugin's own
-  gschema. On each press it sorts the active workspace's `get_tab_list(NORMAL)` windows
-  left-to-right by frame-rect centre (not the list's MRU order — MRU keeps the focused
-  window at index 0, so with discrete presses one direction just ping-pongs between two
-  windows) and activates the neighbour, wrapping at the ends. Skips chrome via the shared
-  `FocusRing.is_chrome_window()` (why it's `internal`, not `private`).
+  gschema, and steps focus through the active workspace's windows in most-recently-used
+  order, wrapping at the ends. `activate()` promotes its window to the front of Mutter's
+  tab list, so reading `get_tab_list(NORMAL)` live each press would just ping-pong between
+  the two most-recent windows; instead the MRU order is snapshotted (as
+  `get_stable_sequence()` ids, which survive window close) and held frozen while stepping,
+  with the position re-derived from the actually-focused window each press. A
+  `do_focus_window` handler drops the snapshot on any focus change that wasn't one of its
+  own switches (tracked via an `expecting` sequence id), so real focus moves reseed it.
+  Skips chrome via the shared `FocusRing.is_chrome_window()` (why it's `internal`).
 - **`FocusRing.vala`** — a `Gala.CanvasActor` subclass stroking a rounded-rect border (via
   `Gala.Drawing.Utilities.cairo_rounded_rectangle`, not `Clutter.Canvas`, which the vapi
   excludes as of Mutter 46) tracking the focused window's frame rect via `do_focus_window` +

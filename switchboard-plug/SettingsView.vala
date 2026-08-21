@@ -135,7 +135,7 @@ namespace Xy {
             add_strv_row (grid, 1, "Switch focus right", "switch-right", "<Super>Right");
 
             child = build_body (
-                "Switch focus between the open windows on the current workspace, ordered left to right by position.",
+                "Switch focus between the open windows on the current workspace, in most-recently-used order.",
                 grid
             );
         }

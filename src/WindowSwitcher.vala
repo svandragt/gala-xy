@@ -1,18 +1,30 @@
 namespace Gala.Plugins.Xy {
     /*
-     * Super+Left / Super+Right step focus back and forth through the active
-     * workspace's windows, ordered left-to-right by on-screen position and
-     * wrapping at the ends.
+     * Super+Left / Super+Right step focus through the active workspace's
+     * windows in most-recently-used order, wrapping at the ends — like
+     * Alt+Tab, but on discrete key presses.
      *
-     * Not most-recently-used order: get_tab_list()'s MRU always has the
-     * focused window at index 0, so with discrete key presses (no held grab
-     * like Alt+Tab) stepping +1 just ping-pongs between the two most-recent
-     * windows. A stable positional order lets both directions walk through
-     * every window.
+     * The catch with MRU: every activate() promotes its window to the front
+     * of Mutter's tab list, so reading get_tab_list() live on each press
+     * would just ping-pong between the two most-recent windows. So the MRU
+     * order is snapshotted once (as stable-sequence ids, which stay valid
+     * even as windows close) and held frozen while stepping; the current
+     * position is re-derived from the actually-focused window each press, so
+     * both directions walk the whole ring. The snapshot is dropped as soon as
+     * a *real* focus change happens (a click, a new window) — anything that
+     * isn't one of our own switches — so the next press starts from fresh MRU.
      */
     public class WindowSwitcher : GLib.Object {
         private Gala.WindowManager wm;
         private GLib.Settings settings;
+        private ulong focus_id = 0;
+
+        // Frozen MRU order for the current run of switches, by window
+        // get_stable_sequence() (never 0 in Mutter, so 0 is a safe "none").
+        private uint[] frozen = {};
+        // The window our own last switch activated, so its focus event can be
+        // told apart from a real user focus change (which resets `frozen`).
+        private uint expecting = 0;
 
         public WindowSwitcher (Gala.WindowManager wm) {
             this.wm = wm;
@@ -21,6 +33,7 @@ namespace Gala.Plugins.Xy {
             var display = wm.get_display ();
             display.add_keybinding ("switch-left", settings, Meta.KeyBindingFlags.NONE, on_switch_left);
             display.add_keybinding ("switch-right", settings, Meta.KeyBindingFlags.NONE, on_switch_right);
+            focus_id = display.do_focus_window.connect (on_focus);
         }
 
         // Named handlers with an explicitly nullable window: the vapi declares
@@ -36,68 +49,85 @@ namespace Gala.Plugins.Xy {
             switch_focus (display, 1);
         }
 
-        private void switch_focus (Meta.Display display, int delta) {
-            var workspace = display.get_workspace_manager ().get_active_workspace ();
-
-            var windows = new Gee.ArrayList<Meta.Window> ();
-            foreach (unowned var window in display.get_tab_list (Meta.TabList.NORMAL, workspace)) {
-                if (!FocusRing.is_chrome_window (window)) {
-                    windows.add (window);
-                }
-            }
-
-            if (windows.size < 2) {
+        // Any focus change that isn't the one our own switch just triggered
+        // means the user moved focus themselves — drop the frozen order so the
+        // next switch re-snapshots from current MRU.
+        private void on_focus (Meta.Display display, Meta.Window? window, int64 timestamp) {
+            if (window != null && window.get_stable_sequence () == expecting) {
+                expecting = 0;
                 return;
             }
 
-            windows.sort (compare_by_position);
+            frozen = {};
+            expecting = 0;
+        }
 
+        private void switch_focus (Meta.Display display, int delta) {
+            var workspace = display.get_workspace_manager ().get_active_workspace ();
+
+            // Live windows in Mutter's current MRU order, chrome excluded.
+            var live = new Gee.ArrayList<unowned Meta.Window> ();
+            foreach (unowned var window in display.get_tab_list (Meta.TabList.NORMAL, workspace)) {
+                if (!FocusRing.is_chrome_window (window)) {
+                    live.add (window);
+                }
+            }
+
+            if (live.size < 2) {
+                return;
+            }
+
+            // Keep the frozen order but drop any window that has since closed;
+            // reseed from live MRU when there's no usable snapshot left.
+            uint[] order = {};
+            foreach (uint seq in frozen) {
+                foreach (unowned var window in live) {
+                    if (window.get_stable_sequence () == seq) {
+                        order += seq;
+                        break;
+                    }
+                }
+            }
+            if (order.length < 2) {
+                order = {};
+                foreach (unowned var window in live) {
+                    order += window.get_stable_sequence ();
+                }
+            }
+            frozen = order;
+
+            // Re-derive position from the actually-focused window, not a stored
+            // index: that's what lets stepping keep advancing through the ring
+            // even though each activate() reshuffles Mutter's own MRU underneath.
             unowned var focused = display.get_focus_window ();
-            int current = -1;
-            for (int i = 0; i < windows.size; i++) {
-                if (windows[i] == focused) {
+            uint focused_seq = focused != null ? focused.get_stable_sequence () : 0;
+            int current = 0;
+            for (int i = 0; i < frozen.length; i++) {
+                if (frozen[i] == focused_seq) {
                     current = i;
                     break;
                 }
             }
 
-            // Nothing (of ours) focused: start from either end so the first
-            // press still lands somewhere sensible.
-            int next = current < 0
-                ? (delta > 0 ? 0 : windows.size - 1)
-                : (current + delta + windows.size) % windows.size;
-
-            windows[next].activate (display.get_current_time ());
-        }
-
-        // Left-to-right by frame-rect centre, tie-broken top-to-bottom, then
-        // by stable sequence so fully-overlapping windows still get a
-        // deterministic order (otherwise the cycle could skip or repeat one).
-        private static int compare_by_position (Meta.Window a, Meta.Window b) {
-            var ra = a.get_frame_rect ();
-            var rb = b.get_frame_rect ();
-
-            int ax = ra.x + ra.width / 2;
-            int bx = rb.x + rb.width / 2;
-            if (ax != bx) {
-                return ax - bx;
+            uint target_seq = frozen[(current + delta + frozen.length) % frozen.length];
+            foreach (unowned var window in live) {
+                if (window.get_stable_sequence () == target_seq) {
+                    expecting = target_seq;
+                    window.activate (display.get_current_time ());
+                    return;
+                }
             }
-
-            int ay = ra.y + ra.height / 2;
-            int by = rb.y + rb.height / 2;
-            if (ay != by) {
-                return ay - by;
-            }
-
-            uint sa = a.get_stable_sequence ();
-            uint sb = b.get_stable_sequence ();
-            return sa < sb ? -1 : (sa > sb ? 1 : 0);
         }
 
         public void destroy () {
             var display = wm.get_display ();
             display.remove_keybinding ("switch-left");
             display.remove_keybinding ("switch-right");
+
+            if (focus_id != 0) {
+                display.disconnect (focus_id);
+                focus_id = 0;
+            }
         }
     }
 }

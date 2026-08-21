@@ -12,8 +12,8 @@ Super+Left and Super+Right. It does not move, resize, or reorder anything.
 - The focused window gets a highlighted border, coloured to match your
   System Settings → Appearance accent colour, updating live if you change it.
 - Super+Left and Super+Right move focus between the open windows on the current
-  workspace, ordered left to right by on-screen position and wrapping at the
-  ends. Panels, docks, and excluded windows are skipped.
+  workspace, in most-recently-used order and wrapping at the ends — like
+  Alt+Tab. Panels, docks, and excluded windows are skipped.
 - Panels, docks, and similar chrome don't get a border (see below).
 
 ## Shortcuts
