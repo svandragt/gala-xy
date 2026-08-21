@@ -39,14 +39,19 @@ namespace Gala.Plugins.Xy {
         // Named handlers with an explicitly nullable window: the vapi declares
         // the argument non-null, but a lambda would get Vala's auto-inserted
         // null assertion (see the same gotcha in FocusRing).
+        //
+        // Left is Back and Right is Forward, like a browser: Left steps toward
+        // older entries in the recently-used order (+1 down the frozen list,
+        // so the first press lands on the previously-focused window), Right
+        // steps back toward the most-recent.
         private void on_switch_left (Meta.Display display, Meta.Window? window,
                                      Clutter.KeyEvent? event, Meta.KeyBinding binding) {
-            switch_focus (display, -1);
+            switch_focus (display, 1);
         }
 
         private void on_switch_right (Meta.Display display, Meta.Window? window,
                                       Clutter.KeyEvent? event, Meta.KeyBinding binding) {
-            switch_focus (display, 1);
+            switch_focus (display, -1);
         }
 
         // Any focus change that isn't the one our own switch just triggered

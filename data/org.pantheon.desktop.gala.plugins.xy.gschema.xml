@@ -3,11 +3,11 @@
   <schema path="/org/pantheon/desktop/gala/plugins/xy/" id="org.pantheon.desktop.gala.plugins.xy">
     <key type="as" name="switch-left">
       <default><![CDATA[['<Super>Left']]]></default>
-      <summary>Focus the next window to the left</summary>
+      <summary>Focus the previous window (back through recently-used order)</summary>
     </key>
     <key type="as" name="switch-right">
       <default><![CDATA[['<Super>Right']]]></default>
-      <summary>Focus the next window to the right</summary>
+      <summary>Focus the next window (forward through recently-used order)</summary>
     </key>
     <key type="as" name="excluded-app-ids">
       <default><![CDATA[['com.vandragt.sidewing']]]></default>
