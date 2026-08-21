@@ -94,6 +94,7 @@ namespace Gala.Plugins.Xy {
 
         private ulong accent_color_id = 0;
         private ulong do_focus_window_id = 0;
+        private ulong restacked_id = 0;
 
         private unowned Meta.Window? tracked = null;
         private ulong position_signal = 0;
@@ -127,6 +128,13 @@ namespace Gala.Plugins.Xy {
 
             var display = wm.get_display ();
             do_focus_window_id = display.do_focus_window.connect (on_focus_window);
+            // An always-on-top window (make_above ()) stays visually in front
+            // of the focused window regardless of focus, but the ring lives
+            // in ui_group above every window layer, so without this it drew
+            // over such windows even when they were stacked above the focus.
+            // restacked fires whenever above-ness or stacking order changes,
+            // so re-check visibility then, not just on move/resize.
+            restacked_id = display.restacked.connect (() => update ());
 
             // Deliberately not calling track() eagerly here with whatever
             // window already has focus: `ring` was just add_child()'d this
@@ -180,6 +188,39 @@ namespace Gala.Plugins.Xy {
             var rect = tracked.get_frame_rect ();
             ring.set_position (rect.x, rect.y);
             ring.set_size (rect.width, rect.height);
+            restack ();
+        }
+
+        // Mutter reparents a window's actor between window_group and
+        // top_window_group (and back) whenever its always-on-top state
+        // changes, rather than just reordering within one group — that's
+        // why `restacked` (not just position/size_changed) has to trigger
+        // this too. Re-deriving the ring's parent and sibling position from
+        // the tracked window's actor every time, instead of assuming a
+        // fixed group, keeps the ring directly above the focused window but
+        // still below whatever else is genuinely stacked in front of it,
+        // like an always-on-top window.
+        private void restack () {
+            if (tracked == null) {
+                return;
+            }
+
+            var window_actor = tracked.get_compositor_private () as Clutter.Actor;
+            if (window_actor == null) {
+                return;
+            }
+
+            unowned Clutter.Actor? parent = window_actor.get_parent ();
+            if (parent == null) {
+                return;
+            }
+
+            if (ring.get_parent () != parent) {
+                ring.get_parent ().remove_child (ring);
+                parent.add_child (ring);
+            }
+
+            parent.set_child_above_sibling (ring, window_actor);
         }
 
         public void destroy () {
@@ -192,6 +233,11 @@ namespace Gala.Plugins.Xy {
             if (do_focus_window_id != 0) {
                 wm.get_display ().disconnect (do_focus_window_id);
                 do_focus_window_id = 0;
+            }
+
+            if (restacked_id != 0) {
+                wm.get_display ().disconnect (restacked_id);
+                restacked_id = 0;
             }
 
             if (accent_color_id != 0) {
