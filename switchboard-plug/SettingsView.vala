@@ -21,6 +21,7 @@ namespace Xy {
             var stack = new Gtk.Stack ();
             stack.add_titled (new ShortcutsPage (settings), "shortcuts", "Shortcuts");
             stack.add_titled (new ExclusionsPage (settings), "exclusions", "Exclusions");
+            stack.add_titled (new PanelPage (settings), "panel", "Panel");
 
             // show_title_buttons reveals SettingsSidebar's own header bar,
             // which is what the shell's Adw.NavigationView back button rides
@@ -41,17 +42,42 @@ namespace Xy {
         }
     }
 
-    // Shared base for both plug pages: each setting they edit is a gschema
-    // `as`, shown as one comma-separated Gtk.Entry, so the row builder and its
-    // mapping delegates live here rather than being duplicated per page.
+    // Shared base for every plug page: the padded description-label + grid
+    // layout they all use, and the GLib.Settings they all bind against.
     //
     // Must extend Switchboard.SettingsPage (not a plain Gtk widget):
     // SwitchboardSettingsSidebar reads title/header/status straight off each
     // stack page's child by casting it to Switchboard.SettingsPage (confirmed
     // by GLib-GObject-CRITICAL "invalid object type ... for value type
     // 'SwitchboardSettingsPage'" when a plain Gtk.Grid/Gtk.Box was used).
-    private abstract class StrvEntryPage : Switchboard.SettingsPage {
+    private abstract class BasePage : Switchboard.SettingsPage {
         protected GLib.Settings settings;
+
+        // Padded box holding a dim description label above the settings grid.
+        protected Gtk.Widget build_body (string description_text, Gtk.Grid grid) {
+            var description = new Gtk.Label (description_text) {
+                wrap = true,
+                xalign = 0,
+                margin_bottom = 12
+            };
+            description.add_css_class ("dim-label");
+
+            var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 0) {
+                margin_top = 24,
+                margin_bottom = 24,
+                margin_start = 24,
+                margin_end = 24
+            };
+            box.append (description);
+            box.append (grid);
+            return box;
+        }
+    }
+
+    // Base for the two pages whose settings are gschema `as` keys, each shown
+    // as one comma-separated Gtk.Entry — hence the row builder and its mapping
+    // delegates, which the non-strv pages have no use for.
+    private abstract class StrvEntryPage : BasePage {
 
         protected void add_strv_row (Gtk.Grid grid, int row, string label_text, string key, string? placeholder) {
             var label = new Gtk.Label (label_text) {
@@ -96,27 +122,6 @@ namespace Xy {
 
             return new GLib.Variant.strv (items);
         }
-
-        // Padded box holding a dim description label above the entry grid,
-        // the same layout both pages use.
-        protected Gtk.Widget build_body (string description_text, Gtk.Grid grid) {
-            var description = new Gtk.Label (description_text) {
-                wrap = true,
-                xalign = 0,
-                margin_bottom = 12
-            };
-            description.add_css_class ("dim-label");
-
-            var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 0) {
-                margin_top = 24,
-                margin_bottom = 24,
-                margin_start = 24,
-                margin_end = 24
-            };
-            box.append (description);
-            box.append (grid);
-            return box;
-        }
     }
 
     // The Super+Left/Right window-switching shortcuts, editable as raw
@@ -158,6 +163,57 @@ namespace Xy {
 
             child = build_body (
                 "Windows matching any of these are treated as system chrome and never get a focus ring.",
+                grid
+            );
+        }
+    }
+
+    // The switcher panel gala-xy shows while stepping through windows with the
+    // switch shortcuts. Both keys are scalars, so unlike the `as` keys above
+    // they bind straight to their widget property with no mapping delegates.
+    private class PanelPage : BasePage {
+        public PanelPage (GLib.Settings settings) {
+            Object (title: "Panel", header: "Window Switcher Panel");
+            this.settings = settings;
+
+            var enabled_label = new Gtk.Label ("Show the switcher panel") {
+                xalign = 1,
+                hexpand = false
+            };
+            enabled_label.add_css_class ("dim-label");
+
+            var enabled_switch = new Gtk.Switch () {
+                halign = Gtk.Align.START
+            };
+            settings.bind ("switcher-panel", enabled_switch, "active", GLib.SettingsBindFlags.DEFAULT);
+
+            var timeout_label = new Gtk.Label ("Hide after (ms)") {
+                xalign = 1,
+                hexpand = false
+            };
+            timeout_label.add_css_class ("dim-label");
+
+            var timeout_spin = new Gtk.SpinButton.with_range (200, 10000, 100) {
+                halign = Gtk.Align.START
+            };
+            settings.bind ("switcher-panel-timeout", timeout_spin, "value", GLib.SettingsBindFlags.DEFAULT);
+            // Grey the timeout out while the panel itself is off (GET only —
+            // the spin button must never write back to the enable key).
+            settings.bind ("switcher-panel", timeout_spin, "sensitive", GLib.SettingsBindFlags.GET);
+
+            var grid = new Gtk.Grid () {
+                row_spacing = 12,
+                column_spacing = 12
+            };
+            grid.attach (enabled_label, 0, 0, 1, 1);
+            grid.attach (enabled_switch, 1, 0, 1, 1);
+            grid.attach (timeout_label, 0, 1, 1, 1);
+            grid.attach (timeout_spin, 1, 1, 1, 1);
+
+            child = build_body (
+                "While switching focus with the shortcuts, list every window on the workspace " +
+                "on screen with the focused one highlighted, so it is clear how many more " +
+                "presses reach a given window.",
                 grid
             );
         }
