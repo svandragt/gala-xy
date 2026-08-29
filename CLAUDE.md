@@ -79,7 +79,7 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   a `Gala.CanvasActor` with PangoCairo (same reason as `FocusRing`: it's the drawing path
   already proven against the Mutter 46 vapi), sized from the widest measured title, and
   faded out by a `GLib.Timeout` that is re-armed on every press (`switcher-panel-timeout`,
-  default 2000 ms; `switcher-panel` turns it off entirely). Unlike the focus ring it stays
+  default 1000 ms; `switcher-panel` turns it off entirely). Unlike the focus ring it stays
   in `ui_group` and is raised to the top there, since it's meant to cover everything.
 - **`FocusRing.vala`** — a `Gala.CanvasActor` subclass stroking a rounded-rect border (via
   `Gala.Drawing.Utilities.cairo_rounded_rectangle`, not `Clutter.Canvas`, which the vapi

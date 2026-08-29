@@ -48,11 +48,23 @@ namespace Gala.Plugins.Xy {
             content.invalidate ();
         }
 
+        // The desktop-wide default font, so the list matches every other bit
+        // of Pantheon chrome. Read once: org.gnome.desktop.interface is a base
+        // dependency on elementary, so the key is always present.
+        private static string? font_name = null;
+
         // A layout configured exactly like the one draw () renders with, so
         // SwitcherPanel can measure the widest title before sizing the actor.
         public static Pango.Layout create_layout (Cairo.Context cr) {
+            if (font_name == null) {
+                font_name = new GLib.Settings ("org.gnome.desktop.interface").get_string ("font-name");
+                if (font_name == "") {
+                    font_name = "Sans 10";
+                }
+            }
+
             var layout = Pango.cairo_create_layout (cr);
-            layout.set_font_description (Pango.FontDescription.from_string ("10"));
+            layout.set_font_description (Pango.FontDescription.from_string (font_name));
             return layout;
         }
 
@@ -96,13 +108,22 @@ namespace Gala.Plugins.Xy {
         private const int MAX_WIDTH = 480;
         private const uint FADE_IN_DURATION = 100;
         private const uint FADE_OUT_DURATION = 150;
+        // How often to check whether the switch modifier is still held. Fast
+        // enough that the hide feels tied to the key release, cheap enough to
+        // ignore.
+        private const uint POLL_INTERVAL = 80;
 
         private Gala.WindowManager wm;
         private GLib.Settings settings;
         private SwitcherPanelContent panel;
         private ulong accent_color_id = 0;
-        private uint hide_id = 0;
+        private uint poll_id = 0;
         private uint hidden_id = 0;
+        // The accelerator's held modifier (Super) and, once it's released, the
+        // monotonic-clock deadline to hide at. -1 means "still held, no
+        // countdown running".
+        private uint modifier_mask = 0;
+        private int64 release_deadline = -1;
 
         public SwitcherPanel (Gala.WindowManager wm) {
             this.wm = wm;
@@ -120,10 +141,12 @@ namespace Gala.Plugins.Xy {
             });
         }
 
-        public void show_for (Gee.List<unowned Meta.Window> windows, int highlighted) {
+        public void show_for (Gee.List<unowned Meta.Window> windows, int highlighted, uint modifier_mask) {
             if (!settings.get_boolean ("switcher-panel") || windows.size == 0) {
                 return;
             }
+
+            this.modifier_mask = modifier_mask;
 
             string[] titles = {};
             foreach (unowned var window in windows) {
@@ -154,21 +177,51 @@ namespace Gala.Plugins.Xy {
             panel.opacity = 255;
             panel.restore_easing_state ();
 
-            if (hide_id != 0) {
-                GLib.Source.remove (hide_id);
+            // Restart the countdown: keep the panel up until the modifier is
+            // released, then hide switcher-panel-timeout ms later. Re-arming on
+            // every press means holding Super and tapping the arrows keeps it
+            // alive; the poll only starts counting down once Super lets go.
+            release_deadline = -1;
+            if (poll_id == 0) {
+                poll_id = GLib.Timeout.add (POLL_INTERVAL, poll_release);
+            }
+        }
+
+        // While the modifier is held, keep resetting the countdown. Once it's
+        // released, arm the deadline; when that passes, hide. A no-modifier
+        // accelerator (mask 0) can't be "held", so it counts down immediately —
+        // degrading to the old fixed dwell after the last press.
+        private bool poll_release () {
+            if (modifier_mask != 0 && (current_modifiers () & modifier_mask) != 0) {
+                release_deadline = -1;
+                return GLib.Source.CONTINUE;
             }
 
-            hide_id = GLib.Timeout.add ((uint) settings.get_int ("switcher-panel-timeout"), () => {
-                hide_id = 0;
+            int64 now = GLib.get_monotonic_time ();
+            if (release_deadline < 0) {
+                release_deadline = now + (int64) settings.get_int ("switcher-panel-timeout") * 1000;
+                return GLib.Source.CONTINUE;
+            }
+
+            if (now >= release_deadline) {
+                poll_id = 0;
                 hide ();
                 return GLib.Source.REMOVE;
-            });
+            }
+
+            return GLib.Source.CONTINUE;
+        }
+
+        private Clutter.ModifierType current_modifiers () {
+            Clutter.ModifierType mods;
+            wm.get_display ().get_cursor_tracker ().get_pointer (null, out mods);
+            return mods & Clutter.ModifierType.MODIFIER_MASK;
         }
 
         public void hide () {
-            if (hide_id != 0) {
-                GLib.Source.remove (hide_id);
-                hide_id = 0;
+            if (poll_id != 0) {
+                GLib.Source.remove (poll_id);
+                poll_id = 0;
             }
 
             if (!panel.visible || hidden_id != 0) {
@@ -214,17 +267,12 @@ namespace Gala.Plugins.Xy {
             height = titles.length * SwitcherPanelContent.ROW_HEIGHT + 2 * SwitcherPanelContent.PADDING;
         }
 
-        // Centred on the monitor showing the focused window, falling back to
-        // the primary one when nothing has focus.
+        // Always centred on the primary monitor: switching focus moves the
+        // focused window's monitor around, and the panel jumping to follow it
+        // is disorienting, so it stays put where the user is looking.
         private void position (int width, int height) {
             var display = wm.get_display ();
-            unowned var focused = display.get_focus_window ();
-            int monitor = focused != null ? focused.get_monitor () : display.get_primary_monitor ();
-            if (monitor < 0) {
-                monitor = display.get_primary_monitor ();
-            }
-
-            var geometry = display.get_monitor_geometry (monitor);
+            var geometry = display.get_monitor_geometry (display.get_primary_monitor ());
             panel.set_position (
                 geometry.x + (geometry.width - width) / 2,
                 geometry.y + (geometry.height - height) / 2
@@ -232,9 +280,9 @@ namespace Gala.Plugins.Xy {
         }
 
         public void destroy () {
-            if (hide_id != 0) {
-                GLib.Source.remove (hide_id);
-                hide_id = 0;
+            if (poll_id != 0) {
+                GLib.Source.remove (poll_id);
+                poll_id = 0;
             }
 
             if (hidden_id != 0) {

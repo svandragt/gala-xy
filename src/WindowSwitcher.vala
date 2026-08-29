@@ -52,12 +52,29 @@ namespace Gala.Plugins.Xy {
         // steps back toward the most-recent.
         private void on_switch_left (Meta.Display display, Meta.Window? window,
                                      Clutter.KeyEvent? event, Meta.KeyBinding binding) {
-            switch_focus (display, 1);
+            switch_focus (display, 1, primary_modifier (binding.get_mask ()));
         }
 
         private void on_switch_right (Meta.Display display, Meta.Window? window,
                                       Clutter.KeyEvent? event, Meta.KeyBinding binding) {
-            switch_focus (display, -1);
+            switch_focus (display, -1, primary_modifier (binding.get_mask ()));
+        }
+
+        // The single held-down modifier of the accelerator (Super, for the
+        // Super+arrow defaults): the highest set bit of its mask, isolated the
+        // way gnome-shell and Gala's own switcher do. The panel watches this
+        // key so it can stay up until the user lets go of it.
+        private static uint primary_modifier (uint mask) {
+            if (mask == 0) {
+                return 0;
+            }
+
+            uint primary = 1;
+            while (mask > 1) {
+                mask >>= 1;
+                primary <<= 1;
+            }
+            return primary;
         }
 
         // Any focus change that isn't the one our own switch just triggered
@@ -75,7 +92,7 @@ namespace Gala.Plugins.Xy {
             panel.hide ();
         }
 
-        private void switch_focus (Meta.Display display, int delta) {
+        private void switch_focus (Meta.Display display, int delta, uint modifier_mask) {
             var workspace = display.get_workspace_manager ().get_active_workspace ();
 
             // Live windows in Mutter's current MRU order, chrome excluded.
@@ -129,7 +146,7 @@ namespace Gala.Plugins.Xy {
 
             expecting = target_window.get_stable_sequence ();
             target_window.activate (display.get_current_time ());
-            panel.show_for (ordered, target);
+            panel.show_for (ordered, target, modifier_mask);
         }
 
         public void destroy () {
