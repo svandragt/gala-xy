@@ -13,10 +13,15 @@ namespace Gala.Plugins.Xy {
      * both directions walk the whole ring. The snapshot is dropped as soon as
      * a *real* focus change happens (a click, a new window) — anything that
      * isn't one of our own switches — so the next press starts from fresh MRU.
+     *
+     * Each switch also hands that frozen order to SwitcherPanel, which shows
+     * it on screen with the newly-focused window highlighted, so the user can
+     * see how many more presses reach the window they're after.
      */
     public class WindowSwitcher : GLib.Object {
         private Gala.WindowManager wm;
         private GLib.Settings settings;
+        private SwitcherPanel panel;
         private ulong focus_id = 0;
 
         // Frozen MRU order for the current run of switches, by window
@@ -29,6 +34,7 @@ namespace Gala.Plugins.Xy {
         public WindowSwitcher (Gala.WindowManager wm) {
             this.wm = wm;
             settings = new GLib.Settings ("org.pantheon.desktop.gala.plugins.xy");
+            panel = new SwitcherPanel (wm);
 
             var display = wm.get_display ();
             display.add_keybinding ("switch-left", settings, Meta.KeyBindingFlags.NONE, on_switch_left);
@@ -56,7 +62,8 @@ namespace Gala.Plugins.Xy {
 
         // Any focus change that isn't the one our own switch just triggered
         // means the user moved focus themselves — drop the frozen order so the
-        // next switch re-snapshots from current MRU.
+        // next switch re-snapshots from current MRU, and take the panel down
+        // with it, since it was showing an order that no longer applies.
         private void on_focus (Meta.Display display, Meta.Window? window, int64 timestamp) {
             if (window != null && window.get_stable_sequence () == expecting) {
                 expecting = 0;
@@ -65,6 +72,7 @@ namespace Gala.Plugins.Xy {
 
             frozen = {};
             expecting = 0;
+            panel.hide ();
         }
 
         private void switch_focus (Meta.Display display, int delta) {
@@ -84,22 +92,24 @@ namespace Gala.Plugins.Xy {
 
             // Keep the frozen order but drop any window that has since closed;
             // reseed from live MRU when there's no usable snapshot left.
-            uint[] order = {};
+            var ordered = new Gee.ArrayList<unowned Meta.Window> ();
             foreach (uint seq in frozen) {
                 foreach (unowned var window in live) {
                     if (window.get_stable_sequence () == seq) {
-                        order += seq;
+                        ordered.add (window);
                         break;
                     }
                 }
             }
-            if (order.length < 2) {
-                order = {};
-                foreach (unowned var window in live) {
-                    order += window.get_stable_sequence ();
-                }
+            if (ordered.size < 2) {
+                ordered.clear ();
+                ordered.add_all (live);
             }
-            frozen = order;
+
+            frozen = {};
+            foreach (unowned var window in ordered) {
+                frozen += window.get_stable_sequence ();
+            }
 
             // Re-derive position from the actually-focused window, not a stored
             // index: that's what lets stepping keep advancing through the ring
@@ -114,14 +124,12 @@ namespace Gala.Plugins.Xy {
                 }
             }
 
-            uint target_seq = frozen[(current + delta + frozen.length) % frozen.length];
-            foreach (unowned var window in live) {
-                if (window.get_stable_sequence () == target_seq) {
-                    expecting = target_seq;
-                    window.activate (display.get_current_time ());
-                    return;
-                }
-            }
+            int target = (current + delta + ordered.size) % ordered.size;
+            unowned var target_window = ordered[target];
+
+            expecting = target_window.get_stable_sequence ();
+            target_window.activate (display.get_current_time ());
+            panel.show_for (ordered, target);
         }
 
         public void destroy () {
@@ -133,6 +141,8 @@ namespace Gala.Plugins.Xy {
                 display.disconnect (focus_id);
                 focus_id = 0;
             }
+
+            panel.destroy ();
         }
     }
 }

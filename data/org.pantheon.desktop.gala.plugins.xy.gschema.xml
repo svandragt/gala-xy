@@ -9,6 +9,16 @@
       <default><![CDATA[['<Super>Right']]]></default>
       <summary>Focus the next window (forward through recently-used order)</summary>
     </key>
+    <key type="b" name="switcher-panel">
+      <default>true</default>
+      <summary>Show the window switcher panel</summary>
+      <description>Show an on-screen list of the windows being switched through, with the focused one highlighted, while stepping with the switch shortcuts.</description>
+    </key>
+    <key type="i" name="switcher-panel-timeout">
+      <default>2000</default>
+      <range min="200" max="10000"/>
+      <summary>How long the switcher panel stays visible after the last press, in milliseconds</summary>
+    </key>
     <key type="as" name="excluded-app-ids">
       <default><![CDATA[['com.vandragt.sidewing']]]></default>
       <summary>GTK application IDs to treat as system chrome</summary>

@@ -13,7 +13,8 @@ was removed wholesale — the tiling model needs rethinking. See git history bef
 `8d49fea` for the previous implementation and the reasoning behind its various hacks.
 
 What's left: a focus ring around the focused window, plus Super+Left/Right to switch
-focus between windows (most-recently-used order, not tiling).
+focus between windows (most-recently-used order, not tiling), with an on-screen panel
+listing that order while switching.
 
 ## Build / install / reload
 
@@ -53,7 +54,7 @@ Verify changes by installing, reloading, and reading `journalctl _COMM=gala | gr
 
 ## Architecture
 
-Three Vala files compiled into one `libgala-xy.so`, registered via `register_plugin()`
+Four Vala files compiled into one `libgala-xy.so`, registered via `register_plugin()`
 at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` load priority).
 
 - **`Main.vala`** — nothing but the plugin shell: construct `FocusRing` and
@@ -68,7 +69,18 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   with the position re-derived from the actually-focused window each press. A
   `do_focus_window` handler drops the snapshot on any focus change that wasn't one of its
   own switches (tracked via an `expecting` sequence id), so real focus moves reseed it.
-  Skips chrome via the shared `FocusRing.is_chrome_window()` (why it's `internal`).
+  Skips chrome via the shared `FocusRing.is_chrome_window()` (why it's `internal`). Hands
+  the frozen order and the new position to `SwitcherPanel` on each switch, and hides it
+  again whenever a real focus change drops that order.
+- **`SwitcherPanel.vala`** — the transient OSD `WindowSwitcher` shows on each switch: a
+  centred vertical list of the frozen MRU order's window titles with the newly-focused
+  one highlighted in the Granite accent color, so the rows between the highlight and a
+  given window are the number of presses away it is. Drawn entirely in one Cairo pass on
+  a `Gala.CanvasActor` with PangoCairo (same reason as `FocusRing`: it's the drawing path
+  already proven against the Mutter 46 vapi), sized from the widest measured title, and
+  faded out by a `GLib.Timeout` that is re-armed on every press (`switcher-panel-timeout`,
+  default 2000 ms; `switcher-panel` turns it off entirely). Unlike the focus ring it stays
+  in `ui_group` and is raised to the top there, since it's meant to cover everything.
 - **`FocusRing.vala`** — a `Gala.CanvasActor` subclass stroking a rounded-rect border (via
   `Gala.Drawing.Utilities.cairo_rounded_rectangle`, not `Clutter.Canvas`, which the vapi
   excludes as of Mutter 46) tracking the focused window's frame rect via `do_focus_window` +
@@ -90,9 +102,12 @@ auto-inserted null assertion crashes Gala.
 plugin — a Switchboard plug, not part of `libgala-xy.so`, installed into Switchboard's
 `personal` category. It has no logic of its own: it's a GTK4 view over the same
 `org.pantheon.desktop.gala.plugins.xy` gschema the plugin itself reads (two exclusion
-lists on the Exclusions page, the two switch keybindings on the Shortcuts page), using
+lists on the Exclusions page, the two switch keybindings on the Shortcuts page, the
+switcher panel's enable/timeout on the Panel page), using
 `GLib.Settings.bind_with_mapping()` to show/edit each `as` (string array) key as a single
-comma-separated `Gtk.Entry` (both pages share a `StrvEntryPage` base for that binding). The mapping delegates use
+comma-separated `Gtk.Entry` (the two strv pages share a `StrvEntryPage` base for that
+binding; every page shares `BasePage` for the description+grid layout, and the Panel
+page's scalar `b`/`i` keys need only a plain `GLib.Settings.bind()`). The mapping delegates use
 GSettings' plain-C-function-pointer form (`SettingsBindGetMappingShared`/
 `...SetMappingShared`, `has_target = false` in the vapi) rather than closures, since that's
 the only overload the vapi exposes — hence they're `static` methods taking an unused
