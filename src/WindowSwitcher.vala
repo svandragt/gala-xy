@@ -30,6 +30,11 @@ namespace Gala.Plugins.Xy {
         // The window our own last switch activated, so its focus event can be
         // told apart from a real user focus change (which resets `frozen`).
         private uint expecting = 0;
+        // The monitor the panel sits on for the current run, latched from the
+        // window focused when the run began (where the user's eyes are) and
+        // held so the panel doesn't hop displays as focus moves across them.
+        // -1 means no run in progress. Reset together with `frozen`.
+        private int run_monitor = -1;
 
         public WindowSwitcher (Gala.WindowManager wm) {
             this.wm = wm;
@@ -89,6 +94,7 @@ namespace Gala.Plugins.Xy {
 
             frozen = {};
             expecting = 0;
+            run_monitor = -1;
             panel.hide ();
         }
 
@@ -133,6 +139,13 @@ namespace Gala.Plugins.Xy {
             // even though each activate() reshuffles Mutter's own MRU underneath.
             unowned var focused = display.get_focus_window ();
             uint focused_seq = focused != null ? focused.get_stable_sequence () : 0;
+
+            // First press of a run: latch the panel to the monitor of the
+            // window focused right now, before we activate the target — that's
+            // still where the user was looking. Held for the rest of the run.
+            if (run_monitor < 0 && focused != null) {
+                run_monitor = focused.get_monitor ();
+            }
             int current = 0;
             for (int i = 0; i < frozen.length; i++) {
                 if (frozen[i] == focused_seq) {
@@ -146,7 +159,7 @@ namespace Gala.Plugins.Xy {
 
             expecting = target_window.get_stable_sequence ();
             target_window.activate (display.get_current_time ());
-            panel.show_for (ordered, target, modifier_mask);
+            panel.show_for (ordered, target, modifier_mask, run_monitor);
         }
 
         public void destroy () {

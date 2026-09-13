@@ -141,7 +141,7 @@ namespace Gala.Plugins.Xy {
             });
         }
 
-        public void show_for (Gee.List<unowned Meta.Window> windows, int highlighted, uint modifier_mask) {
+        public void show_for (Gee.List<unowned Meta.Window> windows, int highlighted, uint modifier_mask, int monitor) {
             if (!settings.get_boolean ("switcher-panel") || windows.size == 0) {
                 return;
             }
@@ -159,7 +159,7 @@ namespace Gala.Plugins.Xy {
 
             panel.set_items (titles, highlighted);
             panel.set_size (width, height);
-            position (width, height);
+            position (width, height, monitor);
 
             // ui_group holds the focus ring too (until it reparents itself next
             // to the focused window's actor), so make sure the panel is on top
@@ -267,12 +267,17 @@ namespace Gala.Plugins.Xy {
             height = titles.length * SwitcherPanelContent.ROW_HEIGHT + 2 * SwitcherPanelContent.PADDING;
         }
 
-        // Always centred on the primary monitor: switching focus moves the
-        // focused window's monitor around, and the panel jumping to follow it
-        // is disorienting, so it stays put where the user is looking.
-        private void position (int width, int height) {
+        // Centred on the run's latched monitor — the one the user was looking
+        // at when they started switching. WindowSwitcher holds it fixed for the
+        // whole run so the panel doesn't hop displays as focus crosses them;
+        // primary is the fallback if that window reported no monitor.
+        private void position (int width, int height, int monitor) {
             var display = wm.get_display ();
-            var geometry = display.get_monitor_geometry (display.get_primary_monitor ());
+            if (monitor < 0) {
+                monitor = display.get_primary_monitor ();
+            }
+
+            var geometry = display.get_monitor_geometry (monitor);
             panel.set_position (
                 geometry.x + (geometry.width - width) / 2,
                 geometry.y + (geometry.height - height) / 2
