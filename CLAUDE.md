@@ -68,7 +68,15 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   tab list, so reading `get_tab_list(NORMAL)` live each press would just ping-pong between
   the two most-recent windows; instead the MRU order is snapshotted (as
   `get_stable_sequence()` ids, which survive window close) and held frozen while stepping,
-  with the position re-derived from the actually-focused window each press. A
+  with the position re-derived from the actually-focused window each press. Each step
+  still calls `activate()` on its target, raising it immediately, but first restores the
+  window it steps away from to its pre-run stacking position: a second snapshot, the
+  workspace's stacking order (via `Meta.Display.sort_windows_by_stacking()`), is taken
+  once at the start of a run and replayed with `raise()` — bottom to top — immediately
+  before every `activate()`. `raise()` rather than `activate()` because it restacks
+  without touching the tab list, so the replay can't disturb the frozen MRU order above.
+  A poll (`POLL_INTERVAL`, watching the accelerator's held modifier) no longer commits
+  anything; it only times the panel's fade-out after the modifier is released. A
   `do_focus_window` handler drops the snapshot on any focus change that wasn't one of its
   own switches (tracked via an `expecting` sequence id), so real focus moves reseed it.
   Skips chrome via the shared `FocusRing.is_chrome_window()` (why it's `internal`). Hands
@@ -79,10 +87,12 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
   one highlighted in the Granite accent color, so the rows between the highlight and a
   given window are the number of presses away it is. Drawn entirely in one Cairo pass on
   a `Gala.CanvasActor` with PangoCairo (same reason as `FocusRing`: it's the drawing path
-  already proven against the Mutter 46 vapi), sized from the widest measured title, and
-  faded out by a `GLib.Timeout` that is re-armed on every press (`switcher-panel-timeout`,
-  default 1000 ms; `switcher-panel` turns it off entirely). Unlike the focus ring it stays
-  in `ui_group` and is raised to the top there, since it's meant to cover everything.
+  already proven against the Mutter 46 vapi), sized from the widest measured title. Owns
+  only the fade in/out itself; `WindowSwitcher` decides when to show and hide it, fading it
+  out via a `GLib.Timeout` re-armed on every press (`switcher-panel-timeout`, default
+  1000 ms; `switcher-panel` turns the panel off entirely, though the modifier-release poll
+  driving that fade-out timing keeps running regardless). Unlike the focus ring it stays in
+  `ui_group` and is raised to the top there, since it's meant to cover everything.
 - **`FocusRing.vala`** — a `Gala.CanvasActor` subclass stroking a rounded-rect border (via
   `Gala.Drawing.Utilities.cairo_rounded_rectangle`, not `Clutter.Canvas`, which the vapi
   excludes as of Mutter 46) tracking the focused window's frame rect via `do_focus_window` +

@@ -7,9 +7,10 @@ namespace Gala.Plugins.Xy {
      * presses reach a given window. This panel renders that frozen order as a
      * vertical list of window titles with the just-focused one highlighted, so
      * the rows above/below the highlight are literally the number of presses
-     * away. It fades in on the first press, re-arms its hide timer on every
-     * subsequent one, and disappears once the user stops (or focus moves for
-     * real, which drops the frozen order anyway).
+     * away. It only fades in and out; WindowSwitcher owns all the timing —
+     * when to show, when to hide, and the modifier-release poll that decides
+     * that — since it's the one that knows whether a run is still live (or
+     * focus moved for real, which drops the frozen order anyway).
      *
      * Everything is painted in one Cairo pass on a Gala.CanvasActor, the same
      * drawing path FocusRing uses — composing Clutter.Text children would mean
@@ -108,22 +109,12 @@ namespace Gala.Plugins.Xy {
         private const int MAX_WIDTH = 480;
         private const uint FADE_IN_DURATION = 100;
         private const uint FADE_OUT_DURATION = 150;
-        // How often to check whether the switch modifier is still held. Fast
-        // enough that the hide feels tied to the key release, cheap enough to
-        // ignore.
-        private const uint POLL_INTERVAL = 80;
 
         private Gala.WindowManager wm;
         private GLib.Settings settings;
         private SwitcherPanelContent panel;
         private ulong accent_color_id = 0;
-        private uint poll_id = 0;
         private uint hidden_id = 0;
-        // The accelerator's held modifier (Super) and, once it's released, the
-        // monotonic-clock deadline to hide at. -1 means "still held, no
-        // countdown running".
-        private uint modifier_mask = 0;
-        private int64 release_deadline = -1;
 
         public SwitcherPanel (Gala.WindowManager wm) {
             this.wm = wm;
@@ -141,12 +132,10 @@ namespace Gala.Plugins.Xy {
             });
         }
 
-        public void show_for (Gee.List<unowned Meta.Window> windows, int highlighted, uint modifier_mask, int monitor) {
+        public void show_for (Gee.List<unowned Meta.Window> windows, int highlighted, int monitor) {
             if (!settings.get_boolean ("switcher-panel") || windows.size == 0) {
                 return;
             }
-
-            this.modifier_mask = modifier_mask;
 
             string[] titles = {};
             foreach (unowned var window in windows) {
@@ -176,54 +165,9 @@ namespace Gala.Plugins.Xy {
             panel.set_easing_duration (FADE_IN_DURATION);
             panel.opacity = 255;
             panel.restore_easing_state ();
-
-            // Restart the countdown: keep the panel up until the modifier is
-            // released, then hide switcher-panel-timeout ms later. Re-arming on
-            // every press means holding Super and tapping the arrows keeps it
-            // alive; the poll only starts counting down once Super lets go.
-            release_deadline = -1;
-            if (poll_id == 0) {
-                poll_id = GLib.Timeout.add (POLL_INTERVAL, poll_release);
-            }
-        }
-
-        // While the modifier is held, keep resetting the countdown. Once it's
-        // released, arm the deadline; when that passes, hide. A no-modifier
-        // accelerator (mask 0) can't be "held", so it counts down immediately —
-        // degrading to the old fixed dwell after the last press.
-        private bool poll_release () {
-            if (modifier_mask != 0 && (current_modifiers () & modifier_mask) != 0) {
-                release_deadline = -1;
-                return GLib.Source.CONTINUE;
-            }
-
-            int64 now = GLib.get_monotonic_time ();
-            if (release_deadline < 0) {
-                release_deadline = now + (int64) settings.get_int ("switcher-panel-timeout") * 1000;
-                return GLib.Source.CONTINUE;
-            }
-
-            if (now >= release_deadline) {
-                poll_id = 0;
-                hide ();
-                return GLib.Source.REMOVE;
-            }
-
-            return GLib.Source.CONTINUE;
-        }
-
-        private Clutter.ModifierType current_modifiers () {
-            Clutter.ModifierType mods;
-            wm.get_display ().get_cursor_tracker ().get_pointer (null, out mods);
-            return mods & Clutter.ModifierType.MODIFIER_MASK;
         }
 
         public void hide () {
-            if (poll_id != 0) {
-                GLib.Source.remove (poll_id);
-                poll_id = 0;
-            }
-
             if (!panel.visible || hidden_id != 0) {
                 return;
             }
@@ -285,11 +229,6 @@ namespace Gala.Plugins.Xy {
         }
 
         public void destroy () {
-            if (poll_id != 0) {
-                GLib.Source.remove (poll_id);
-                poll_id = 0;
-            }
-
             if (hidden_id != 0) {
                 GLib.Source.remove (hidden_id);
                 hidden_id = 0;
