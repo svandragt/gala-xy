@@ -1,4 +1,4 @@
-project('gala-xy', 'vala', 'c', version: '0.2.0')
+project('gala-xy', 'vala', 'c', version: '0.3.0')
 
 gnome = import('gnome')
 
