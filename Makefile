@@ -7,7 +7,7 @@ SWITCHBOARD_PLUG_DIR := /usr/lib/x86_64-linux-gnu/switchboard-3/personal
 SCHEMA_DIR := /usr/local/share/glib-2.0/schemas
 SCHEMA := org.pantheon.desktop.gala.plugins.xy.gschema.xml
 
-.PHONY: all setup build install uninstall clean lint format
+.PHONY: all setup build test install uninstall clean lint format
 
 all: build
 
@@ -16,6 +16,9 @@ setup:
 
 build: setup
 	ninja -C $(BUILD_DIR)
+
+test: build
+	meson test -C $(BUILD_DIR) --print-errorlogs
 
 install: build
 	sudo ninja -C $(BUILD_DIR) install

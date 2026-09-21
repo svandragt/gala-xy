@@ -92,32 +92,11 @@ namespace Xy {
 
             settings.bind_with_mapping (
                 key, entry, "text", GLib.SettingsBindFlags.DEFAULT,
-                strv_to_text, text_to_strv, null, null
+                Strv.to_text, Strv.to_strv, null, null
             );
 
             grid.attach (label, 0, row, 1, 1);
             grid.attach (entry, 1, row, 1, 1);
-        }
-
-        // GSettings' vapi only exposes the plain-C-function-pointer form of
-        // these mappings (has_target = false), so they're static methods
-        // with an unused user_data, not closures.
-        private static bool strv_to_text (GLib.Value value, GLib.Variant variant, void* user_data) {
-            value.set_string (string.joinv (", ", variant.get_strv ()));
-            return true;
-        }
-
-        private static GLib.Variant text_to_strv (GLib.Value value, GLib.VariantType expected_type, void* user_data) {
-            string text = value.get_string ();
-            string[] items = {};
-            foreach (unowned string part in text.split (",")) {
-                string trimmed = part.strip ();
-                if (trimmed != "") {
-                    items += trimmed;
-                }
-            }
-
-            return new GLib.Variant.strv (items);
         }
     }
 

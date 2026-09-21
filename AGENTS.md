@@ -22,6 +22,7 @@ Gala/Mutter focus issues.
 
 ```
 make build      # meson setup + ninja
+make test       # meson test (tests/logic-test.vala, the pure logic only)
 make install    # build + sudo ninja install (installs both .so's + gschema)
 make uninstall  # remove both .so's and the schema, recompile schemas
 make clean      # rm -rf build
@@ -51,21 +52,25 @@ crash (`meta_x11_barriers_free` assertion on teardown), separate from anything i
 plugin, but confusing to debug around. `io.elementary.gala@x11.service` is a
 dependency-only static unit; logging out lets it come back up cleanly on its own.
 
-There is no automated test suite (the geometry test went with the tiling math it covered).
-Verify changes by installing, reloading, and reading `journalctl _COMM=gala | grep xy`.
-Restoring one for the pure logic is tracked in #3 (Add an automated test suite for the
-pure logic).
+`make test` runs `tests/logic-test.vala` against `src/Logic.vala` and
+`switchboard-plug/Strv.vala` — the pure logic that needs no live Mutter session. Everything
+else (the focus ring, the keybindings, the stacking replay) still has to be verified by
+installing, reloading, and reading `journalctl _COMM=gala | grep xy`.
 
 To cut a release, follow `RELEASING.md` — it starts with a documentation refresh, so the
 tag points at docs that match the code.
 
 ## Architecture
 
-Four Vala files compiled into one `libgala-xy.so`, registered via `register_plugin()`
+Five Vala files compiled into one `libgala-xy.so`, registered via `register_plugin()`
 at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` load priority).
 
 - **`Main.vala`** — nothing but the plugin shell: construct `FocusRing` and
   `WindowSwitcher` on `initialize()`, destroy them on `destroy()`.
+- **`Logic.vala`** — the pure logic pulled out of the other three files: no `Meta.*`,
+  `Clutter.*` or `Gala.*` types anywhere in it, which is what lets it compile into
+  `tests/logic-test.vala` as well as the plugin. Anything that's pure computation belongs
+  here rather than in the Mutter-dependent file that uses it, so it stays testable.
 - **`WindowSwitcher.vala`** — registers the `switch-left`/`switch-right` keybindings
   (defaults Super+Left/Right) via `display.add_keybinding()` against the plugin's own
   gschema, and steps focus through the active workspace's windows in most-recently-used

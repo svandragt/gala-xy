@@ -37,6 +37,7 @@ shared_library('gala-xy',
         'src/FocusRing.vala',
         'src/WindowSwitcher.vala',
         'src/SwitcherPanel.vala',
+        'src/Logic.vala',
     ),
     dependencies: [gala_dep, dependency('gee-0.8'), dependency('gio-unix-2.0'), dependency('pango'), dependency('pangocairo'), dependency('gdk-pixbuf-2.0'), dependency('granite-7'), dependency('gtk4')] + mutter_dep,
     install: true,
@@ -53,6 +54,7 @@ shared_module('xy-settings',
     files(
         'switchboard-plug/Plug.vala',
         'switchboard-plug/SettingsView.vala',
+        'switchboard-plug/Strv.vala',
     ),
     dependencies: [switchboard_dep, dependency('granite-7'), dependency('gtk4'), dependency('gee-0.8')],
     install: true,
@@ -60,3 +62,17 @@ shared_module('xy-settings',
 )
 
 gnome.post_install(glib_compile_schemas: true)
+
+# The pure logic (src/Logic.vala, switchboard-plug/Strv.vala) is the only part
+# of the plugin that doesn't need a live Mutter session, so it's the only part
+# with an automated test — see tests/logic-test.vala and AGENTS.md for why the
+# rest is verified live instead.
+logic_test_exe = executable('logic-test',
+    files(
+        'src/Logic.vala',
+        'switchboard-plug/Strv.vala',
+        'tests/logic-test.vala',
+    ),
+    dependencies: [dependency('glib-2.0'), dependency('gobject-2.0')],
+)
+test('logic', logic_test_exe)

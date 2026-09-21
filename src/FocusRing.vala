@@ -73,23 +73,11 @@ namespace Gala.Plugins.Xy {
             // The vapi declares get_title () non-nullable, but Mutter
             // returns NULL for a window that hasn't set a title yet — the
             // same lies-about-nullability trap as the focus signal below.
-            string title = (window.get_title () ?? "").down ();
-            foreach (unowned string keyword in exclusion_settings.get_strv ("excluded-title-keywords")) {
-                if (keyword != "" && title.contains (keyword.down ())) {
-                    return true;
-                }
-            }
-
-            string? app_id = window.get_gtk_application_id ();
-            if (app_id != null) {
-                foreach (unowned string excluded_id in exclusion_settings.get_strv ("excluded-app-ids")) {
-                    if (app_id == excluded_id) {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
+            return Logic.is_excluded (
+                window.get_title (), window.get_gtk_application_id (),
+                exclusion_settings.get_strv ("excluded-title-keywords"),
+                exclusion_settings.get_strv ("excluded-app-ids")
+            );
         }
 
         private Gala.WindowManager wm;

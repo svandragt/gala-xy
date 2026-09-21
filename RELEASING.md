@@ -46,13 +46,14 @@ gschema against README.md key by key — an undocumented key is invisible.
 
 ```
 make build
+make test
 make lint
 ```
 
-Both must pass. There is no automated test suite yet, so also install the
-plugin, log out and back in, and use it — see [#3](https://github.com/svandragt/gala-xy/issues/3).
-Reloading with `gala --replace` or `systemctl --user kill` triggers an
-unrelated Mutter crash, so log out instead.
+All three must pass. `make test` only covers the pure logic in `src/Logic.vala` and
+`switchboard-plug/Strv.vala`, so also install the plugin, log out and back in, and use
+it to verify the rest. Reloading with `gala --replace` or `systemctl --user kill`
+triggers an unrelated Mutter crash, so log out instead.
 
 ## Tag it
 
@@ -77,8 +78,9 @@ of a good pull request description. Use these sections in this order:
    key was added.
 3. **Details** — one short subsection per highlight that needs more than a
    line. Say what the user sees, then why.
-4. **How we checked** — the evidence. Name what was verified and how. While
-   there is no test suite, say so plainly rather than implying coverage.
+4. **How we checked** — the evidence. Name what was verified and how. The automated
+   test suite only covers the pure logic, so say plainly that the rest was checked by
+   hand rather than implying full coverage.
 5. **Known gaps** — what still does not work, in the same plain language.
 6. **Issues closed** — `#N (title)` for each.
 

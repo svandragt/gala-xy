@@ -17,9 +17,6 @@ namespace Gala.Plugins.Xy {
      * relying on rather more of the Mutter 46 vapi than this repo has proven.
      */
     internal class SwitcherPanelContent : Gala.CanvasActor {
-        public const int ROW_HEIGHT = 32;
-        public const int PADDING = 12;
-        public const int TEXT_PADDING = 10;
         private const int RADIUS = 8;
         private const int ROW_RADIUS = 4;
 
@@ -80,16 +77,16 @@ namespace Gala.Plugins.Xy {
 
             var layout = create_layout (cr);
             layout.set_ellipsize (Pango.EllipsizeMode.END);
-            layout.set_width ((width - 2 * PADDING - 2 * TEXT_PADDING) * Pango.SCALE);
+            layout.set_width ((width - 2 * Logic.PADDING - 2 * Logic.TEXT_PADDING) * Pango.SCALE);
 
             for (int i = 0; i < titles.length; i++) {
-                double row_y = PADDING + i * ROW_HEIGHT;
+                double row_y = Logic.PADDING + i * Logic.ROW_HEIGHT;
 
                 if (i == highlighted) {
                     cr.set_source_rgba (accent.red / 255.0, accent.green / 255.0,
                         accent.blue / 255.0, accent.alpha / 255.0);
                     Gala.Drawing.Utilities.cairo_rounded_rectangle (cr,
-                        PADDING, row_y, width - 2 * PADDING, ROW_HEIGHT, ROW_RADIUS);
+                        Logic.PADDING, row_y, width - 2 * Logic.PADDING, Logic.ROW_HEIGHT, ROW_RADIUS);
                     cr.fill ();
                 }
 
@@ -98,15 +95,13 @@ namespace Gala.Plugins.Xy {
                 layout.get_pixel_size (out text_width, out text_height);
 
                 cr.set_source_rgba (1.0, 1.0, 1.0, 1.0);
-                cr.move_to (PADDING + TEXT_PADDING, row_y + (ROW_HEIGHT - text_height) / 2.0);
+                cr.move_to (Logic.PADDING + Logic.TEXT_PADDING, row_y + (Logic.ROW_HEIGHT - text_height) / 2.0);
                 Pango.cairo_show_layout (cr, layout);
             }
         }
     }
 
     public class SwitcherPanel : GLib.Object {
-        private const int MIN_WIDTH = 240;
-        private const int MAX_WIDTH = 480;
         private const uint FADE_IN_DURATION = 100;
         private const uint FADE_OUT_DURATION = 150;
 
@@ -206,9 +201,7 @@ namespace Gala.Plugins.Xy {
                 }
             }
 
-            width = text_width + 2 * SwitcherPanelContent.PADDING + 2 * SwitcherPanelContent.TEXT_PADDING;
-            width = int.max (MIN_WIDTH, int.min (MAX_WIDTH, width));
-            height = titles.length * SwitcherPanelContent.ROW_HEIGHT + 2 * SwitcherPanelContent.PADDING;
+            Logic.panel_size (text_width, titles.length, out width, out height);
         }
 
         // Centred on the run's latched monitor — the one the user was looking

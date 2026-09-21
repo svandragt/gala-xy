@@ -87,29 +87,12 @@ namespace Gala.Plugins.Xy {
         // steps back toward the most-recent.
         private void on_switch_left (Meta.Display display, Meta.Window? window,
                                      Clutter.KeyEvent? event, Meta.KeyBinding binding) {
-            switch_focus (display, 1, primary_modifier (binding.get_mask ()));
+            switch_focus (display, 1, Logic.primary_modifier (binding.get_mask ()));
         }
 
         private void on_switch_right (Meta.Display display, Meta.Window? window,
                                       Clutter.KeyEvent? event, Meta.KeyBinding binding) {
-            switch_focus (display, -1, primary_modifier (binding.get_mask ()));
-        }
-
-        // The single held-down modifier of the accelerator (Super, for the
-        // Super+arrow defaults): the highest set bit of its mask, isolated the
-        // way gnome-shell and Gala's own switcher do. The panel watches this
-        // key so it can stay up until the user lets go of it.
-        private static uint primary_modifier (uint mask) {
-            if (mask == 0) {
-                return 0;
-            }
-
-            uint primary = 1;
-            while (mask > 1) {
-                mask >>= 1;
-                primary <<= 1;
-            }
-            return primary;
+            switch_focus (display, -1, Logic.primary_modifier (binding.get_mask ()));
         }
 
         private Clutter.ModifierType current_modifiers () {
@@ -156,6 +139,12 @@ namespace Gala.Plugins.Xy {
 
             // Keep the frozen order but drop any window that has since closed;
             // reseed from live MRU when there's no usable snapshot left.
+            uint[] live_seqs = {};
+            foreach (unowned var window in live) {
+                live_seqs += window.get_stable_sequence ();
+            }
+
+            frozen = Logic.reconcile_order (frozen, live_seqs);
             var ordered = new Gee.ArrayList<unowned Meta.Window> ();
             foreach (uint seq in frozen) {
                 foreach (unowned var window in live) {
@@ -164,15 +153,6 @@ namespace Gala.Plugins.Xy {
                         break;
                     }
                 }
-            }
-            if (ordered.size < 2) {
-                ordered.clear ();
-                ordered.add_all (live);
-            }
-
-            frozen = {};
-            foreach (unowned var window in ordered) {
-                frozen += window.get_stable_sequence ();
             }
 
             // Re-derive position from the actually-focused window, not a stored
@@ -212,7 +192,7 @@ namespace Gala.Plugins.Xy {
                 }
             }
 
-            int target = (current + delta + ordered.size) % ordered.size;
+            int target = Logic.step_index (ordered.size, current, delta);
             unowned var target_window = ordered[target];
 
             expecting = target_window.get_stable_sequence ();
