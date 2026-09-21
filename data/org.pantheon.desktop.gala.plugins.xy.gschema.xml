@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
   <schema path="/org/pantheon/desktop/gala/plugins/xy/" id="org.pantheon.desktop.gala.plugins.xy">
+    <key type="b" name="enabled">
+      <default>true</default>
+      <summary>Enable the gala-xy plugin</summary>
+      <description>Turning this off tears the plugin down at runtime: the focus ring and the switcher panel disappear and the switch shortcuts are released back to Gala, with no need to uninstall or log out.</description>
+    </key>
+    <key type="as" name="toggle-enabled">
+      <default><![CDATA[['<Control><Alt><Super>x']]]></default>
+      <summary>Toggle the gala-xy plugin on or off</summary>
+    </key>
     <key type="as" name="switch-left">
       <default><![CDATA[['<Super>Left']]]></default>
       <summary>Focus the previous window (back through recently-used order)</summary>

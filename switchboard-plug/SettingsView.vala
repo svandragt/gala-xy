@@ -19,6 +19,7 @@ namespace Xy {
             var settings = new GLib.Settings ("org.pantheon.desktop.gala.plugins.xy");
 
             var stack = new Gtk.Stack ();
+            stack.add_titled (new GeneralPage (settings), "general", "General");
             stack.add_titled (new ShortcutsPage (settings), "shortcuts", "Shortcuts");
             stack.add_titled (new ExclusionsPage (settings), "exclusions", "Exclusions");
             stack.add_titled (new PanelPage (settings), "panel", "Panel");
@@ -72,13 +73,9 @@ namespace Xy {
             box.append (grid);
             return box;
         }
-    }
 
-    // Base for the two pages whose settings are gschema `as` keys, each shown
-    // as one comma-separated Gtk.Entry — hence the row builder and its mapping
-    // delegates, which the non-strv pages have no use for.
-    private abstract class StrvEntryPage : BasePage {
-
+        // Row builder for the gschema `as` keys shown as one comma-separated
+        // Gtk.Entry — used by the two pages whose settings are strv keys.
         protected void add_strv_row (Gtk.Grid grid, int row, string label_text, string key, string? placeholder) {
             var label = new Gtk.Label (label_text) {
                 xalign = 1,
@@ -124,10 +121,46 @@ namespace Xy {
         }
     }
 
+    // The runtime kill switch: turning gala-xy off tears it down without a
+    // log out, so it's the first page — the thing to reach for when ruling
+    // this plugin out of Gala/Mutter focus weirdness.
+    private class GeneralPage : BasePage {
+        public GeneralPage (GLib.Settings settings) {
+            Object (title: "General", header: "Plugin");
+            this.settings = settings;
+
+            var enabled_label = new Gtk.Label ("Enable gala-xy") {
+                xalign = 1,
+                hexpand = false
+            };
+            enabled_label.add_css_class ("dim-label");
+
+            var enabled_switch = new Gtk.Switch () {
+                halign = Gtk.Align.START
+            };
+            settings.bind ("enabled", enabled_switch, "active", GLib.SettingsBindFlags.DEFAULT);
+
+            var grid = new Gtk.Grid () {
+                row_spacing = 12,
+                column_spacing = 12
+            };
+            grid.attach (enabled_label, 0, 0, 1, 1);
+            grid.attach (enabled_switch, 1, 0, 1, 1);
+            add_strv_row (grid, 1, "Toggle shortcut", "toggle-enabled", "<Control><Alt><Super>x");
+
+            child = build_body (
+                "Turning gala-xy off removes the focus ring and the switcher panel and releases " +
+                "the switch shortcuts back to Gala, which makes it easy to tell whether a " +
+                "problem comes from this plugin or from Gala itself.",
+                grid
+            );
+        }
+    }
+
     // The Super+Left/Right window-switching shortcuts, editable as raw
     // accelerator strings (e.g. "<Super>Left"). Multiple accelerators per
     // action are allowed, comma-separated, like the exclusion lists.
-    private class ShortcutsPage : StrvEntryPage {
+    private class ShortcutsPage : BasePage {
         public ShortcutsPage (GLib.Settings settings) {
             Object (title: "Shortcuts", header: "Keyboard Shortcuts");
             this.settings = settings;
@@ -149,7 +182,7 @@ namespace Xy {
     // The window-exclusion lists FocusRing.is_chrome_window() reads at runtime
     // (see gala-xy's gschema) — a window matching either list is treated as
     // system chrome and never gets a focus ring.
-    private class ExclusionsPage : StrvEntryPage {
+    private class ExclusionsPage : BasePage {
         public ExclusionsPage (GLib.Settings settings) {
             Object (title: "Exclusions", header: "Excluded Windows");
             this.settings = settings;

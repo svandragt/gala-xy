@@ -152,6 +152,27 @@ namespace Gala.Plugins.Xy {
             // has had a full frame cycle to become valid, and the ring
             // simply appears a beat later than at eager-track, which
             // isn't perceptible.
+            //
+            // That startup guarantee doesn't hold when the plugin is
+            // re-enabled at runtime via the `enabled` kill switch (see
+            // Main.apply_enabled()): no focus change is pending then, so
+            // nothing would ever call track() and the ring would stay
+            // invisible until the user happened to change focus by hand.
+            // track_focused() below exists for that path — Main calls it
+            // itself, from its own GLib.Idle.add(), rather than this
+            // constructor calling it eagerly, so the timing here is
+            // unchanged from the startup case above. What actually makes
+            // that safe now is the realization guard in update(): even if
+            // that idle still fires before `ring` is realized, update()
+            // bails out instead of hitting the old assertion.
+        }
+
+        // Delegates to the same track() the startup do_focus_window signal
+        // uses, so Main can seed the ring with whatever window already has
+        // focus when re-enabling at runtime (see the constructor comment
+        // above for why the constructor itself doesn't do this).
+        public void track_focused () {
+            track (wm.get_display ().get_focus_window ());
         }
 
         // Named handler with an explicitly nullable window: the vapi
@@ -185,6 +206,18 @@ namespace Gala.Plugins.Xy {
 
         private void update () {
             if (tracked == null) {
+                return;
+            }
+
+            // Guards the same unrealized-actor case the constructor's
+            // comment describes: `ring` has no stage until Clutter has
+            // realized it, and touching position/size before that is what
+            // logged the `CLUTTER_IS_ACTOR` assertion. track_focused() can
+            // now call track() (and so update()) before that's happened,
+            // so bail out instead of relying on timing — a later
+            // position_changed/size_changed/restacked will call update()
+            // again once the actor is actually on a stage.
+            if (ring.get_stage () == null) {
                 return;
             }
 

@@ -14,7 +14,9 @@ was removed wholesale — the tiling model needs rethinking. See git history bef
 
 What's left: a focus ring around the focused window, plus Super+Left/Right to switch
 focus between windows (most-recently-used order, not tiling), with an on-screen panel
-listing that order while switching.
+listing that order while switching. The whole plugin can be switched off at runtime
+(default shortcut Ctrl+Alt+Super+X) as a kill switch for ruling it out when debugging
+Gala/Mutter focus issues.
 
 ## Build / install / reload
 
@@ -84,7 +86,12 @@ at the bottom of `src/Main.vala` (`Gala.PluginFunction.ADDITION`, `IMMEDIATE` lo
 - **`FocusRing.vala`** — a `Gala.CanvasActor` subclass stroking a rounded-rect border (via
   `Gala.Drawing.Utilities.cairo_rounded_rectangle`, not `Clutter.Canvas`, which the vapi
   excludes as of Mutter 46) tracking the focused window's frame rect via `do_focus_window` +
-  `position_changed`/`size_changed`. Drawn *inset* within the window's own frame rect rather
+  `position_changed`/`size_changed`. The constructor deliberately doesn't track whatever
+  window already has focus (see its comment for the `CLUTTER_IS_ACTOR` assertion that
+  forced it); `Main` seeds it instead via `track_focused()` when the `enabled` kill switch
+  turns the plugin back on, since no focus change is pending then. `update()` bails out
+  while the ring has no stage, so that path can't reproduce the assertion.
+  Drawn *inset* within the window's own frame rect rather
   than offset outside it, so it can't get clipped off the edge of the stage when a window is
   full-width/full-height on its monitor. `is_chrome_window()` reads the
   `excluded-title-keywords`/`excluded-app-ids` gschema keys so panels/docks don't get a ring
@@ -101,13 +108,14 @@ auto-inserted null assertion crashes Gala.
 `switchboard-plug/` is a separate build target (`libxy-settings.so`) from the Gala
 plugin — a Switchboard plug, not part of `libgala-xy.so`, installed into Switchboard's
 `personal` category. It has no logic of its own: it's a GTK4 view over the same
-`org.pantheon.desktop.gala.plugins.xy` gschema the plugin itself reads (two exclusion
-lists on the Exclusions page, the two switch keybindings on the Shortcuts page, the
-switcher panel's enable/timeout on the Panel page), using
-`GLib.Settings.bind_with_mapping()` to show/edit each `as` (string array) key as a single
-comma-separated `Gtk.Entry` (the two strv pages share a `StrvEntryPage` base for that
-binding; every page shares `BasePage` for the description+grid layout, and the Panel
-page's scalar `b`/`i` keys need only a plain `GLib.Settings.bind()`). The mapping delegates use
+`org.pantheon.desktop.gala.plugins.xy` gschema the plugin itself reads (the plugin's
+enable switch and toggle shortcut on the General page, two exclusion lists on the
+Exclusions page, the two switch keybindings on the Shortcuts page, the switcher panel's
+enable/timeout on the Panel page), using `GLib.Settings.bind_with_mapping()` to show/edit
+each `as` (string array) key as a single comma-separated `Gtk.Entry` (every page shares
+`BasePage` for the description+grid layout and, for the strv keys, the `add_strv_row`
+binding helper; the Panel page's scalar `b`/`i` keys need only a plain
+`GLib.Settings.bind()`). The mapping delegates use
 GSettings' plain-C-function-pointer form (`SettingsBindGetMappingShared`/
 `...SetMappingShared`, `has_target = false` in the vapi) rather than closures, since that's
 the only overload the vapi exposes — hence they're `static` methods taking an unused
