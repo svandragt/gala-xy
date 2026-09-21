@@ -47,18 +47,51 @@ behaviour should be made here first, then implemented.
   refreshes when focus changes by other means (a click, a new window).
 - Excluded windows (see below) are skipped, the same set that gets no border.
 - The shortcuts default to Super+Left and Super+Right and are rebindable.
+- Each step raises the window it lands on. A window stepped *past* on the way
+  drops back to the stacking position it held before this run of switching
+  began, rather than staying on top — so walking several windows deep doesn't
+  drag every window passed through to the front. If the switch key is tapped
+  without holding its modifier, each press counts as its own run, so a window
+  reached that way keeps its raise.
 
-## 5. Settings
+## 5. Switcher panel
 
-- Both exclusion lists and the two switch shortcuts live in one system-wide
-  settings store shared by the plugin and its settings UI, so changes from
-  either side are picked up by the other.
-- They appear in **System Settings → Window Behaviour**, installed alongside
-  the plugin, as free-form text fields (comma-separated for the exclusion
-  lists, accelerator strings for the shortcuts), and are equally settable from
-  the command line.
+- While the user is switching, an on-screen panel lists the windows in the
+  current switch order, so they can see how many more presses reach a given
+  window.
+- It appears centred on whichever monitor the run of switching started on,
+  and stays there for the rest of that run even if focus moves to a window on
+  a different one.
+- The window just landed on is highlighted in the system accent colour; the
+  rows between the highlight and any other entry are the number of presses
+  away it is.
+- It stays visible while the switch shortcut's modifier key is held, then
+  fades out a short, adjustable delay after it's released. It can be turned
+  off entirely.
 
-## 6. Non-goals and known limitations
+## 6. Enabling and disabling
+
+- The user can turn the whole plugin off without uninstalling it or logging
+  out. Doing so removes the focus ring and the switcher panel, and returns
+  the switch shortcuts to the window manager's own default behaviour.
+- A dedicated keyboard shortcut toggles this on or off, and keeps working
+  even while the rest of the plugin is off.
+- The point of this is being able to tell whether a problem comes from the
+  plugin or from the window manager underneath it, without extra steps.
+
+## 7. Settings
+
+- The exclusion lists, the two switch shortcuts, the switcher panel's on/off
+  state and fade delay, and the plugin's own on/off state and toggle shortcut
+  all live in one system-wide settings store shared by the plugin and its
+  settings UI, so changes from either side are picked up by the other.
+- They appear in **System Settings → Window Behaviour**, installed
+  alongside the plugin, as free-form text fields (comma-separated for the
+  exclusion lists, accelerator strings for the shortcuts), switches, and a
+  number field for the fade delay — and are equally settable from the command
+  line.
+
+## 8. Non-goals and known limitations
 
 - No tiling, and no window movement or resizing of any kind.
 - The border's corner radius approximates the common Granite/GTK default; a
@@ -66,9 +99,11 @@ behaviour should be made here first, then implemented.
 - Built and verified against the elementaryOS 8-era window manager; other
   versions may need adjustment.
 
-## 7. Quality expectations
+## 9. Quality expectations
 
 - The plugin must never take down the window manager. A failure should degrade
   to "the border stops appearing", not "the session is unusable".
 - The border must never be left behind on a window that has lost focus or
   closed.
+- If the plugin's own behaviour is ever in doubt, turning it off must reliably
+  rule it out, without uninstalling or logging out.

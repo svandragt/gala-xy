@@ -14,7 +14,19 @@ Super+Left and Super+Right. It does not move, resize, or reorder anything.
 - Super+Left and Super+Right move focus between the open windows on the current
   workspace, in most-recently-used order and wrapping at the ends — like
   Alt+Tab. Panels, docks, and excluded windows are skipped.
+- Each press raises the window it lands on. A window you step past on the
+  way drops back to the stacking position it had before you started
+  switching, so walking several windows deep doesn't drag every one you
+  passed to the front. If you tap the shortcut without holding the modifier,
+  each press is its own run, so that window keeps its raise.
+- While switching, an on-screen panel lists the windows in the current run,
+  centred on whichever monitor you started on, with the one you've just
+  landed on highlighted — the rows between the highlight and any other entry
+  are how many presses away it is. It fades out once you let go of the
+  modifier.
 - Panels, docks, and similar chrome don't get a border (see below).
+- The whole plugin can be switched off in place — see "Enabling and
+  disabling" below.
 
 ## Shortcuts
 
@@ -26,12 +38,41 @@ gsettings set org.pantheon.desktop.gala.plugins.xy switch-left "['<Super>Left']"
 gsettings set org.pantheon.desktop.gala.plugins.xy switch-right "['<Super>Right']"
 ```
 
+## Switcher panel
+
+The panel shown while switching is on by default. Turn it off, or change how
+long it stays up after you let go of the modifier, via
+**System Settings → Window Behaviour → Panel**, or with `gsettings`:
+
+```
+gsettings set org.pantheon.desktop.gala.plugins.xy switcher-panel false
+gsettings set org.pantheon.desktop.gala.plugins.xy switcher-panel-timeout 1500
+```
+
+`switcher-panel-timeout` is in milliseconds, from 200 to 10000.
+
+## Enabling and disabling
+
+Turning the plugin off removes the focus ring and the switcher panel and
+releases Super+Left/Right back to Gala's own snap-tiling, without needing to
+uninstall or log out — useful for telling whether a problem comes from this
+plugin or from Gala/Mutter itself. `Ctrl+Alt+Super+X` toggles it and keeps
+working even while the plugin is off. Change either via
+**System Settings → Window Behaviour → General**, or with
+`gsettings`:
+
+```
+gsettings set org.pantheon.desktop.gala.plugins.xy enabled false
+gsettings set org.pantheon.desktop.gala.plugins.xy toggle-enabled "['<Control><Alt><Super>x']"
+```
+
 ## Excluding windows
 
 Wingpanel and Plank are excluded by default, matched by a substring in their
 window title; anything else can be added the same way, or by GTK application
 ID if the app has more than one window and only some should be excluded —
-either via **System Settings → Window Behaviour → Exclusions**, or with `gsettings`:
+either via **System Settings → Window Behaviour → Exclusions**, or
+with `gsettings`:
 
 ```
 gsettings set org.pantheon.desktop.gala.plugins.xy excluded-title-keywords "['wingpanel', 'plank', 'some-substring']"
