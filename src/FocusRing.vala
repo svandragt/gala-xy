@@ -70,7 +70,10 @@ namespace Gala.Plugins.Xy {
                 exclusion_settings = new GLib.Settings ("org.pantheon.desktop.gala.plugins.xy");
             }
 
-            string title = window.get_title ().down ();
+            // The vapi declares get_title () non-nullable, but Mutter
+            // returns NULL for a window that hasn't set a title yet — the
+            // same lies-about-nullability trap as the focus signal below.
+            string title = (window.get_title () ?? "").down ();
             foreach (unowned string keyword in exclusion_settings.get_strv ("excluded-title-keywords")) {
                 if (keyword != "" && title.contains (keyword.down ())) {
                     return true;
