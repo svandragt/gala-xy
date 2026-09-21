@@ -219,8 +219,25 @@ namespace Gala.Plugins.Xy {
 
             // Drop whatever the previous step raised back to its pre-run
             // position before raising the new target — see restore_stack().
+            bool was_demanding = target_window.demands_attention;
             restore_stack ();
             target_window.activate (display.get_current_time ());
+
+            // meta_window_activate_full() gives up and calls
+            // set_demands_attention() instead of focusing when the timestamp
+            // predates display->last_user_time. No focus change follows, so
+            // `expecting` would survive to swallow a genuine later focus on
+            // this same window — stranding run_monitor and original_stack
+            // with it, which makes the next run replay a stale stacking
+            // order. Its other bail-out, an unmanaging window, needs no
+            // handling: stable sequences are never reused, so that sentinel
+            // can never match anything again. Don't test get_focus_window()
+            // here instead — on X11 it still reports the old window until
+            // the server's FocusIn arrives, so it reads as failure even when
+            // the activate worked.
+            if (!was_demanding && target_window.demands_attention) {
+                expecting = 0;
+            }
 
             this.modifier_mask = modifier_mask;
             panel.show_for (ordered, target, run_monitor);
